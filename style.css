@@ -1,0 +1,74 @@
+/* Global Font & Background */
+.stApp {
+    background-color: #FFF9F5;
+    /* Very pale warm white/orange */
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+/* Header Styling */
+h1,
+h2,
+h3 {
+    color: #4A3B32;
+    /* Soft Dark Brown */
+    font-weight: 700;
+}
+
+/* Custom Calendar Title */
+.calendar-header {
+    background-color: #FFDAB9;
+    /* Peach Puff */
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 20px;
+    color: #5D4037;
+    text-align: center;
+}
+
+/* Button Styling Override */
+/* Primary Button (Book Available / Confirm) - Soft Blue */
+div.stButton>button[kind="primary"] {
+    background-color: #87CEFA;
+    border-color: #87CEFA;
+    color: #333333;
+    /* Darker text for visibility */
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 16px;
+    /* Larger text */
+}
+
+div.stButton>button[kind="primary"]:hover {
+    background-color: #72b9eb;
+    border-color: #72b9eb;
+    color: #000000;
+}
+
+/* Secondary Button (Calendar Days) - Warm Cream/Orange */
+div.stButton>button[kind="secondary"] {
+    background-color: #FFF0E0;
+    border: 1px solid #FFCC99;
+    color: #333;
+    border-radius: 5px;
+    font-weight: bold;
+    height: 60px;
+    /* Taller buttons for calendar feel */
+}
+
+div.stButton>button[kind="secondary"]:hover {
+    background-color: #FFE4c4;
+    border-color: #FFB366;
+}
+
+/* Disabled Button (Full/Closed) */
+div.stButton>button:disabled {
+    background-color: #F5F5F5;
+    color: #999;
+    border: 1px solid #EEE;
+}
+
+/* Admin Cancel Button (Red but soft) */
+.admin-cancel {
+    background-color: #FF6B6B;
+    color: white;
+}
