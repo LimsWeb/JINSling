@@ -1,4 +1,4 @@
-# jinSling
+# JINSling
 
 **손님은 편하게 예약하고, 사장님은 한눈에 관리해요.**
 
@@ -12,7 +12,7 @@
 
 아이디와 비밀번호로 시작해요. 가입 승인은 처음 한 번만 받으면 돼요.
 
-![아이디와 비밀번호로 시작하는 jinSling 첫 화면](docs/screenshots/welcome-preview.jpg)
+![아이디와 비밀번호로 시작하는 JINSling 첫 화면](docs/screenshots/welcome-preview.jpg)
 
 ### 2. 손님은 원하는 시간을 골라요
 
