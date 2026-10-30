@@ -135,7 +135,7 @@ function render(){
 }
 function renderAuth(mode){
   const version=++renderVersion;
-  const intro=el('section',{class:'auth-intro'},brand(),el('h1',{},'나를 위한 시간,',el('br'),'가볍게 예약해요.'),el('p',{},'편안한 방문을 위한 30분. 원하는 날짜와 시간을 고르면 예약이 시작돼요.'),el('span',{class:'accent-tag'},'가입 승인 한 번, 이후에는 편하게 로그인'));
+  const intro=el('section',{class:'auth-intro'},brand(),el('h1',{},'편한 시간에,',el('br'),'예약해요.'),el('p',{},'원하는 시간을 고르고, 내 예약을 확인해요.'),el('span',{class:'accent-tag'},'가입 승인은 처음 한 번만'));
   const card=el('section',{class:'auth-card'});
   const loginScreen=()=>{inviteToken=null;resetToken=null;renderAuth('login');};
   if(!state.session?.auth_ready){
@@ -149,14 +149,14 @@ function renderAuth(mode){
       finishAuthentication(result,'관리자 계정을 만들었어요. 공개할 매장 연락처는 운영 설정에서 따로 정할 수 있어요.');
     }),el('p',{class:'auth-footer'},'개인 연락처는 고객 안내에 자동으로 표시되지 않아요. 등록 후에는 아이디와 비밀번호로 로그인해요.'));
   }else if(mode==='join'){
-    card.append(el('h2',{},'처음 오셨나요?'),el('p',{},'아이디와 비밀번호를 만들어 주세요. 관리자가 가입을 한 번 승인하면, 다음부터는 별도 승인 없이 로그인하고 예약할 수 있어요.'));
+    card.append(el('h2',{},'처음 오셨나요?'),el('p',{},'가입 후 사장님이 한 번 확인해요. 승인되면 바로 예약할 수 있어요.'));
     if(state.session.settings.registration_open===false){
       card.append(el('div',{class:'inline-info'},'지금은 신규 가입을 받지 않아요. 기존 회원은 계속 로그인할 수 있어요.'));
     }else{
-      const signup=form([field('이름','name','text','',{required:true,maxlength:80,autocomplete:'name'}),field('연락처','phone','tel','',{required:true,maxlength:30,autocomplete:'tel'}),usernameField(),...newPasswordFields()],'가입하고 승인 기다리기',async values=>{
+      const signup=form([field('이름','name','text','',{required:true,maxlength:80,autocomplete:'name'}),field('연락처','phone','tel','',{required:true,maxlength:30,autocomplete:'tel'}),usernameField(),...newPasswordFields()],'가입 신청',async values=>{
         const body={name:values.name,phone:values.phone,username:normalizeUsername(values.username),password:validateNewPassword(values.password,values.password_confirm)};
         if(inviteToken)body.invite_token=inviteToken;
-        const result=await api('/auth/join',{method:'POST',body});finishAuthentication(result,'가입 신청을 보냈어요. 첫 승인 후에는 언제든 직접 로그인할 수 있어요.');
+        const result=await api('/auth/join',{method:'POST',body});finishAuthentication(result,'가입 신청을 보냈어요. 승인되면 예약할 수 있어요.');
       });
       if(inviteToken!==null){
         const note=el('div',{class:'inline-info'},'초대 링크를 확인하고 있어요. 초대 없이도 가입할 수 있어요.');card.append(note);
@@ -194,16 +194,16 @@ function renderAuth(mode){
     }).catch(error=>{if(version===renderVersion){check.replaceChildren();inlineError(check,error);}});
     card.append(el('p',{class:'auth-footer'},button('로그인 화면으로',loginScreen,'link-button')));
   }else{
-    card.append(el('h2',{},'다시 오셨네요'),el('p',{},'아이디와 비밀번호로 나의 예약을 확인하세요. 첫 가입 승인 후에는 매번 승인을 받지 않아도 돼요.'),form([usernameField(),field('비밀번호','password','password','',{required:true,autocomplete:'current-password'})],'로그인',async values=>{
+    card.append(el('h2',{},'반가워요'),el('p',{},'로그인하고 내 예약을 확인해요.'),form([usernameField(),field('비밀번호','password','password','',{required:true,autocomplete:'current-password'})],'로그인',async values=>{
       const result=await api('/auth/login',{method:'POST',body:{username:normalizeUsername(values.username),password:values.password}});finishAuthentication(result);
-    }),el('p',{class:'auth-footer'},state.session.settings.registration_open===false?'현재 신규 가입은 잠시 쉬고 있어요.':el('span',{},'처음 방문하셨나요? ',button('회원 가입',()=>renderAuth('join'),'link-button')),el('br'),'비밀번호를 잊었다면 관리자에게 재설정 링크를 요청해 주세요.'),el('div',{class:'auth-secondary'},button('기존 접속키 계정 전환',()=>renderAuth('legacy'),'link-button')));
+    }),el('p',{class:'auth-footer'},state.session.settings.registration_open===false?'현재 신규 가입은 잠시 쉬고 있어요.':el('span',{},'처음 방문하셨나요? ',button('회원 가입',()=>renderAuth('join'),'link-button')),el('br'),'비밀번호를 잊었다면 사장님에게 문의해 주세요.'),el('div',{class:'auth-secondary'},button('예전 접속키로 시작',()=>renderAuth('legacy'),'link-button')));
   }
   app.replaceChildren(el('main',{class:'auth-shell'},intro,card));
 }
 function renderPending(){
   const user=state.session.user;
   const title=user.status==='pending'?'승인을 기다리고 있어요':'현재 예약을 이용할 수 없어요';
-  app.replaceChildren(el('main',{class:'workspace'},brand(),el('section',{class:'card pending-card'},el('span',{class:'brand-mark','aria-hidden':'true'},'j.'),badge(user.status),el('h1',{class:'section-space'},title),el('p',{},`${user.name}님, ${user.status==='pending'?'관리자가 처음 가입한 정보를 확인하고 있어요. 한 번 승인되면 이후에는 직접 로그인해서 예약할 수 있어요.':'자세한 내용은 매장 관리자에게 문의해 주세요.'}`),el('p',{class:'muted'},`아이디 · ${user.username}`),el('p',{class:'muted'},contactNote()),el('div',{class:'actions'},button('승인 상태 확인',refreshSession),button('비밀번호 변경',changePassword,'outline'),button('로그아웃',logout,'outline')))));
+  app.replaceChildren(el('main',{class:'workspace'},brand(),el('section',{class:'card pending-card'},el('span',{class:'brand-mark','aria-hidden':'true'},'j.'),badge(user.status),el('h1',{class:'section-space'},title),el('p',{},`${user.name}님, ${user.status==='pending'?'사장님의 가입 승인을 기다려 주세요. 승인은 처음 한 번만 필요해요.':'자세한 내용은 사장님에게 문의해 주세요.'}`),el('p',{class:'muted'},`아이디 · ${user.username}`),el('p',{class:'muted'},contactNote()),el('div',{class:'actions'},button('승인 상태 확인',refreshSession),button('비밀번호 변경',changePassword,'outline'),button('로그아웃',logout,'outline')))));
 }
 async function logout(){try{await api('/auth/logout',{method:'POST'});state.session.user=null;inviteToken=null;resetToken=null;renderAuth('login');}catch(error){notify(error.message,true);}}
 function changePassword(){
