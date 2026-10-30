@@ -19,3 +19,19 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# jinSling v2 development and generated outputs
+node_modules/
+web/dist/
+web/.local/
+web/.wrangler/
+web/.dev.vars
+web/wrangler.jsonc
+.superpowers/
+.openai/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db-shm
+*.db-wal
+jinsling-backup*.sql

@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jinsling",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-10-30",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "jinsling-db",
+      "database_id": "REPLACE_WITH_THE_REAL_ID_RETURNED_BY_CLOUDFLARE",
+      "migrations_dir": "./migrations"
+    }
+  ]
+}
