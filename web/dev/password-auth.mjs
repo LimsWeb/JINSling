@@ -12,7 +12,7 @@ function usernameValue(value) {
   return value.toLowerCase();
 }
 function passwordValue(value) {
-  if (typeof value !== 'string' || Array.from(value).length < 15 || Array.from(value).length > 128) throw new AuthProviderError('INVALID_CREDENTIALS');
+  if (typeof value !== 'string' || Array.from(value).length < 12 || Array.from(value).length > 128) throw new AuthProviderError('INVALID_CREDENTIALS');
   return value;
 }
 function uidValue(value) {

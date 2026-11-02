@@ -1,10 +1,14 @@
 import {WEEKDAYS,seoulToday,addDays,dateLabel,consumeAuthFragment,listenForAuthFragments,normalizeUsername,validateNewPassword,canCustomerChange,parseTimestamp,createRequestId} from './ui-utils.mjs';
+import {startVisibleRefresh,sessionAccessKey} from './page-refresh.mjs';
+import {renderShareCard,shareCardBlob} from './share-card.mjs';
 
 let {inviteToken,resetToken} = consumeAuthFragment(window.location, window.history);
 const app = document.querySelector('#app');
 const dialog = document.querySelector('#dialog');
-const state = {session:null,page:'reserve',date:seoulToday(),slot:null,availability:null,preview:[],calendarMonth:seoulToday().slice(0,7),scheduleMode:'day'};
+const state = {session:null,page:'reserve',date:seoulToday(),slot:null,availability:null,preview:[],calendarMonth:seoulToday().slice(0,7),scheduleMode:'upcoming'};
 let renderVersion = 0;
+let refreshPage = null;
+let showRefreshError = null;
 let notificationTimer;
 let previewBusy = false;
 const statusLabels = {approved:'이용 가능',pending:'승인 대기',suspended:'이용 중지',rejected:'가입 거절',confirmed:'예약 확정',cancelled:'취소됨'};
@@ -61,7 +65,7 @@ function newPasswordFields(name='password'){
   const password=field('새 비밀번호',name,'password','',{required:true,autocomplete:'new-password'});
   // Native maxlength counts UTF-16 units; validation below counts Unicode
   // characters, matching the API and preserving all password whitespace.
-  password.append(el('small',{class:'field-hint'},'15–128자. 한글과 공백도 사용할 수 있고, 앞뒤 공백도 포함돼요.'));
+  password.append(el('small',{class:'field-hint'},'12–128자. 한글과 공백도 사용할 수 있고, 앞뒤 공백도 포함돼요.'));
   return [password,field('새 비밀번호 확인','password_confirm','password','',{required:true,autocomplete:'new-password'})];
 }
 function form(fields,submitText,onSubmit) {
@@ -81,7 +85,8 @@ function openDialog(title,content,options={}) {
   const close = button('×',()=>dialog.close(),'dialog-close',{'aria-label':'창 닫기'});
   dialog.replaceChildren(el('div',{class:'dialog-head'},el('h2',{id:'dialog-title'},title),close),content);
   dialog.oncancel = options.preventEscape ? event => event.preventDefault() : null;
-  dialog.onclose = () => {if(dialog.open)return;dialog.replaceChildren();options.onClose?.();};
+  dialog.dataset.holdSession=String(Boolean(options.holdSession));
+  dialog.onclose = () => {if(dialog.open)return;dialog.replaceChildren();options.onClose?.();void visibleRefresh.run();};
   dialog.showModal();
 }
 function confirmation(title,text,submitText,action) {
@@ -94,19 +99,60 @@ function confirmation(title,text,submitText,action) {
   content.append(errorArea,el('div',{class:'dialog-actions'},button('돌아가기',()=>dialog.close(),'secondary'),accept));
   openDialog(title,content);
 }
-function secretDialog(title,secret,{invite=false,expiresAt,onClose}={}) {
+function secretDialog(title,secret,{invite=false,expiresAt,onClose,holdSession=false}={}) {
   const description=invite ? '이 초대 링크는 7일 동안 한 번 사용할 수 있어요. 초대할 분에게 직접 전달해 주세요.' : '이 재설정 링크는 24시간 동안 한 번 사용할 수 있어요. 지금 한 번만 표시되므로 본인에게 안전하게 전달해 주세요. 비밀번호는 본인이 직접 정해요.';
   const content = el('div',{},el('div',{class:'secret-warning'},description),expiresAt?el('p',{class:'note'},`사용 기한 · ${timestamp(expiresAt)} (서울)`):null,el('div',{class:'secret-value',tabindex:'0'},secret));
   const feedback=el('p',{class:'muted',role:'status'});
-  const copy=button('복사하기',async()=>{
+  const copy=button('링크 복사',async()=>{
     try {await navigator.clipboard.writeText(secret);feedback.textContent='복사했어요. 안전한 곳에 보관해 주세요.';}catch{feedback.textContent='자동 복사를 사용할 수 없어요. 위 내용을 선택해서 직접 복사해 주세요.';}
   },'secondary');
   const save=button('파일로 보관',()=>{
     const blob=new Blob([`${title}\n${secret}\n${expiresAt?`사용 기한: ${timestamp(expiresAt)} (서울)\n`:''}\n${invite?'초대할 분에게만 전달해 주세요.':'해당 회원 본인에게만 전달해 주세요. 24시간 동안 한 번 사용할 수 있어요.'}\n`],{type:'text/plain;charset=utf-8'});
     const url=URL.createObjectURL(blob);const link=el('a',{href:url,download:invite?'jinSling-invite.txt':'jinSling-password-reset.txt'});link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);feedback.textContent='저장한 파일을 안전하게 보관해 주세요.';
   },'outline');
+  if(invite)content.append(shareCardPanel(secret,'invite',expiresAt));
   content.append(el('div',{class:'actions'},copy,save),feedback,el('div',{class:'dialog-actions'},button('보관했어요',()=>dialog.close())));
-  openDialog(title,content,{onClose});
+  // Self-reset invalidates the current cookie; keep its one-time link until saved.
+  openDialog(title,content,{onClose,holdSession});
+}
+function downloadBlob(blob,filename){
+  const url=URL.createObjectURL(blob);
+  const link=el('a',{href:url,download:filename});
+  document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),10_000);
+}
+function shareCardPanel(url,kind,expiresAt){
+  const preview=el('div',{class:'share-card-preview'},loading());
+  const feedback=el('p',{class:'note',role:'status'});
+  let canvas;
+  const save=button('이미지 저장 (PNG)',async()=>{
+    if(!canvas||save.disabled)return;
+    save.disabled=true;
+    try{downloadBlob(await shareCardBlob(canvas),kind==='invite'?'jinSling-invite-QR.png':'jinSling-booking-QR.png');feedback.textContent='이미지와 링크를 함께 보내면 받는 분이 편하게 접속할 수 있어요.';}
+    catch{feedback.textContent='이미지를 저장하지 못했어요. 다시 눌러 주세요. 링크 복사는 계속 이용할 수 있어요.';}
+    finally{save.disabled=false;}
+  },'',{disabled:true});
+  const panel=el('section',{class:'share-card-panel'},preview,save,feedback);
+  renderShareCard({url,kind,expiresAt,shopName:state.session.settings.shop_name||'jinSling 예약'}).then(result=>{
+    if(!panel.isConnected)return;
+    canvas=result;canvas.setAttribute('role','img');canvas.setAttribute('aria-label',`주소가 위에 있고 QR 코드가 가운데 있는 ${kind==='invite'?'1회용 초대':'공용 예약'} 안내 이미지`);
+    preview.replaceChildren(canvas);save.disabled=false;
+  }).catch(()=>{if(panel.isConnected){preview.replaceChildren(el('p',{class:'inline-error'},'이미지를 만들지 못했어요. 창을 닫고 다시 시도해 주세요.'));}});
+  return panel;
+}
+function publicShareDialog(){
+  const url=`${window.location.origin}/`;
+  const feedback=el('p',{class:'note',role:'status'});
+  const copy=button('링크 복사',async()=>{
+    try{await navigator.clipboard.writeText(url);feedback.textContent='예약 주소를 복사했어요. 이미지와 함께 보내 주세요.';}
+    catch{feedback.textContent='위 주소를 선택해 직접 복사해 주세요.';}
+  },'outline');
+  openDialog('예약 안내 · QR 이미지',el('div',{},
+    el('p',{},'여러 손님에게 계속 안내할 수 있는 공용 예약 주소예요. 처음 가입하면 사장님의 승인이 필요해요.'),
+    el('div',{class:'secret-value',tabindex:'0'},url),
+    shareCardPanel(url,'public'),copy,feedback,
+    el('p',{class:'note'},'사진 속 주소는 클릭되지 않아요. 링크도 함께 보내면 바로 눌러 접속할 수 있어요.')
+  ));
 }
 function finishAuthentication(result,message){
   state.session={...state.session,configured:true,user:result.user};
@@ -122,7 +168,34 @@ function errorPage(container,error,retry){container.replaceChildren(el('div',{cl
 
 async function loadSession(){state.session=await api('/session');return state.session;}
 async function refreshSession(){try{await loadSession();render();}catch(error){notify(error.message,true);}}
+async function refreshVisiblePage(){
+  if(!state.session||previewBusy||document.querySelector('form[aria-busy="true"]'))return;
+  const version=renderVersion;
+  const previousAccess=sessionAccessKey(state.session);
+  let latest;
+  try{latest=await api('/session');}catch(error){if(version===renderVersion)throw error;return;}
+  if(version!==renderVersion||document.querySelector('form[aria-busy="true"]'))return;
+  // A self-reset intentionally logs out this account before showing its one-time
+  // link. Keep that link for a null session, but still detect a different login.
+  if(dialog.open&&dialog.dataset.holdSession==='true'&&latest.configured&&!latest.user)return;
+  state.session=latest;
+  if(previousAccess!==sessionAccessKey(latest)){
+    // Tabs share a login cookie. Never leave an old account's screen or dialog visible.
+    dialog.onclose=null;
+    if(dialog.open)dialog.close();
+    dialog.replaceChildren();
+    state.slot=null;state.availability=null;
+    state.page=latest.user?.role==='admin'?'schedule':'reserve';
+    render();notify('로그인 상태가 바뀌어 화면을 다시 불러왔어요.');
+    return;
+  }
+  // Refresh only the list, preserving filters, forms and open editing dialogs.
+  if(dialog.open||document.querySelector('form[aria-busy="true"]'))return;
+  await refreshPage?.();
+}
+const visibleRefresh=startVisibleRefresh({refresh:refreshVisiblePage,onError:error=>showRefreshError?.(error)});
 function render(){
+  refreshPage=null;showRefreshError=null;
   renderVersion++;
   const session=state.session;
   if(resetToken!==null){renderAuth('reset');return;}
@@ -134,6 +207,7 @@ function render(){
   renderShell();
 }
 function renderAuth(mode){
+  refreshPage=null;showRefreshError=null;
   const version=++renderVersion;
   const intro=el('section',{class:'auth-intro'},brand(),el('h1',{},'편한 시간에,',el('br'),'예약해요.'),el('p',{},'원하는 시간을 고르고, 내 예약을 확인해요.'),el('span',{class:'accent-tag'},'가입 승인은 처음 한 번만'));
   const card=el('section',{class:'auth-card'});
@@ -215,7 +289,7 @@ function changePassword(){
 }
 function renderShell(){
   const admin=state.session.user.role==='admin';
-  const links=admin ? [['schedule','◷','예약 일정'],['reserve','＋','예약하기'],['mine','▤','내 예약'],['settings','☷','운영 설정'],['users','♧','회원 관리'],['audit','↗','기록 · 내보내기']] : [['reserve','＋','예약하기'],['mine','▤','내 예약']];
+  const links=admin ? [['schedule','◷','예약 일정'],['reserve','＋','예약하기'],['mine','▤','내 계정 예약'],['settings','☷','운영 설정'],['users','♧','회원 관리'],['audit','↗','기록 · 내보내기']] : [['reserve','＋','예약하기'],['mine','▤','내 예약']];
   if(!links.some(([key])=>key===state.page))state.page=admin?'schedule':'reserve';
   const nav=el('nav',{class:'navigation','aria-label':'주 메뉴'},links.map(([key,icon,label])=>el('button',{type:'button',class:`nav-button${state.page===key?' active':''}`,'aria-current':state.page===key?'page':null,onclick:()=>{state.page=key;if(key==='reserve')state.calendarMonth=state.date.slice(0,7);render();}},el('span',{class:'nav-icon','aria-hidden':'true'},icon),label)));
   const user=state.session.user;
@@ -291,15 +365,31 @@ function bookingCard(booking,{admin=false}={}){
   return el('article',{class:'card booking-card'},date,details,actions);
 }
 async function renderMine(container,version){
-  container.append(pageHead('MY RESERVATIONS','내 예약','다가오는 방문부터 지난 예약까지 한눈에 확인하세요.',button('새로고침',render,'outline')));
+  const admin=state.session.user.role==='admin';
+  container.append(pageHead('MY RESERVATIONS',admin?'내 계정 예약':'내 예약',admin?'이 관리자 계정으로 직접 잡은 예약만 표시해요. 손님 예약은 예약 일정에서 확인해 주세요.':'다가오는 방문부터 지난 예약까지 한눈에 확인하세요.',button('새로고침',()=>visibleRefresh.run(),'outline')));
+  if(admin)container.append(el('p',{class:'inline-info'},button('손님 전체 예약 보기',()=>{state.page='schedule';state.scheduleMode='upcoming';render();},'secondary')));
   const today=seoulToday();
-  const range=form([el('div',{class:'field-row'},field('조회 시작일','from','date',addDays(today,-30),{required:true}),field('조회 종료일','to','date',addDays(today,Number(state.session.settings.booking_window_days)),{required:true}))],'기간 조회',async values=>{if(values.from>values.to)throw new Error('종료일을 시작일 이후로 선택해 주세요.');const data=await api(`/bookings?from=${values.from}&to=${values.to}`);renderItems(data.items);});
-  const wrap=el('section',{class:'card'},range);const list=el('div',{class:'stack section-space'},loading());container.append(wrap,list);
+  let from=addDays(today,-30),to=addDays(today,Number(state.session.settings.booking_window_days));
+  let request=0,lastItems=null;
+  const range=form([el('div',{class:'field-row'},field('조회 시작일','from','date',from,{required:true}),field('조회 종료일','to','date',to,{required:true}))],'기간 조회',async values=>{if(values.from>values.to)throw new Error('종료일을 시작일 이후로 선택해 주세요.');from=values.from;to=values.to;await update();});
+  const status=syncStatus();
+  const wrap=el('section',{class:'card'},range);const list=el('div',{class:'stack section-space'},loading());container.append(wrap,status.node,list);
   const renderItems=items=>{
     const own=items.filter(item=>item.user_id===state.session.user.id).sort((a,b)=>`${a.date}${a.start_time}`.localeCompare(`${b.date}${b.start_time}`));
     list.replaceChildren(...(own.length?own.map(item=>bookingCard(item)): [empty('이 기간에 예약이 없어요. 나에게 맞는 시간을 골라 보세요.')]));
   };
-  const data=await api(`/bookings?from=${addDays(today,-30)}&to=${addDays(today,Number(state.session.settings.booking_window_days))}`);if(version===renderVersion)renderItems(data.items);
+  const update=async()=>{
+    const current=++request;
+    try{
+      const data=await api(`/bookings?from=${from}&to=${to}`);
+      if(version!==renderVersion||current!==request||dialog.open)return;
+      const signature=JSON.stringify(data.items);
+      if(signature!==lastItems){renderItems(data.items);lastItems=signature;}
+      status.success();
+    }catch(error){if(version===renderVersion&&current===request){status.failure(error);if(lastItems===null)list.replaceChildren(empty('예약 목록을 아직 불러오지 못했어요. 다시 확인해 주세요.'));}}
+  };
+  refreshPage=update;showRefreshError=status.failure;
+  await update();
 }
 function cancelBooking(booking){
   const content=form([el('p',{},`${dateLabel(booking.date)} ${booking.start_time} 예약을 취소할까요? 취소한 시간은 다시 예약할 수 있어요.`),field('취소 사유 (선택)','reason','textarea','',{maxlength:500})],'예약 취소하기',async values=>{await api(`/bookings/${encodeURIComponent(booking.id)}/cancel`,{method:'POST',body:{version:booking.version,reason:values.reason}});dialog.close();render();notify('예약을 취소했어요.');});
@@ -312,22 +402,58 @@ function editBooking(booking,admin){
   openDialog(admin?'일정 · 메모 변경':'메모 수정',form(fields,'변경 내용 저장',async values=>{await api(`/bookings/${encodeURIComponent(booking.id)}`,{method:'PATCH',body:{version:booking.version,...values}});dialog.close();render();notify('예약 변경 내용을 저장했어요.');}));
 }
 
+function syncStatus(){
+  const node=el('p',{class:'sync-status',role:'status'},'예약 목록을 확인하고 있어요…');
+  let lastSuccess='';
+  return {
+    node,
+    success(){
+      lastSuccess=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date());
+      node.classList.remove('sync-error');node.textContent=`마지막 확인 ${lastSuccess} · 화면을 보고 있을 때 30초마다 갱신해요.`;
+    },
+    failure(){node.classList.add('sync-error');node.textContent=`최신 예약을 확인하지 못했어요. 연결을 확인하고 새로고침해 주세요.${lastSuccess?` 마지막 확인 ${lastSuccess}의 목록을 표시하고 있어요.`:''}`;},
+  };
+}
 async function renderSchedule(container,version){
-  const start=state.date,end=state.scheduleMode==='week'?addDays(start,6):start;
+  const upcoming=state.scheduleMode==='upcoming';
+  const start=upcoming?seoulToday():state.date;
+  if(upcoming)state.date=start;
+  const end=upcoming?addDays(start,Number(state.session.settings.booking_window_days)):state.scheduleMode==='week'?addDays(start,6):start;
   container.append(pageHead('STUDIO SCHEDULE','예약 일정','방문을 준비하고, 전화로 받은 예약도 함께 관리해요.',button('＋ 수기 예약',manualBooking)));
-  const dateInput=el('input',{type:'date',value:start,'aria-label':'일정 조회 시작일',onchange:event=>{if(event.target.value){state.date=event.target.value;render();}}});
-  const modes=el('div',{class:'segmented'},['day','week'].map(mode=>el('button',{type:'button',class:state.scheduleMode===mode?'active':'','aria-pressed':String(state.scheduleMode===mode),onclick:()=>{state.scheduleMode=mode;render();}},mode==='day'?'하루 보기':'7일 보기')));
-  const toolbar=el('div',{class:'toolbar'},modes,button('‹',()=>{state.date=addDays(state.date,state.scheduleMode==='day'?-1:-7);render();},'outline small',{'aria-label':'이전 기간'}),dateInput,button('›',()=>{state.date=addDays(state.date,state.scheduleMode==='day'?1:7);render();},'outline small',{'aria-label':'다음 기간'}),button('오늘',()=>{state.date=seoulToday();render();},'secondary small'),button('새로고침',render,'outline small'));
-  container.append(toolbar);const body=el('div',{},loading());container.append(body);
-  const data=await api(`/bookings?from=${start}&to=${end}`);if(version!==renderVersion)return;
-  const confirmed=data.items.filter(item=>item.status==='confirmed');
-  const stats=el('div',{class:'stat-row'},[['확정 예약',confirmed.length],['취소된 예약',data.items.length-confirmed.length],['예약된 시간',`${confirmed.length*.5}시간`]].map(([title,value])=>el('div',{class:'card stat'},el('span',{},title),el('strong',{},value))));
-  body.replaceChildren(stats);
-  for(let date=start;date<=end;date=addDays(date,1)){
-    const items=data.items.filter(item=>item.date===date).sort((a,b)=>a.start_time.localeCompare(b.start_time));
-    body.append(el('section',{class:'day-group section-space'},el('h3',{},dateLabel(date)),el('div',{class:'stack'},...(items.length?items.map(item=>bookingCard(item,{admin:true})):[empty('등록된 예약이 없어요.')]))));
-  }
-  body.append(el('p',{class:'note'},'일정은 자동으로 갱신되지 않아요. 새 예약을 확인하려면 새로고침을 눌러 주세요.'));
+  const dateInput=el('input',{type:'date',value:start,disabled:upcoming,'aria-label':'일정 조회 시작일',onchange:event=>{if(event.target.value){state.date=event.target.value;render();}}});
+  const modes=el('div',{class:'segmented'},[['upcoming','다가오는 예약'],['day','하루 보기'],['week','7일 보기']].map(([mode,label])=>el('button',{type:'button',class:state.scheduleMode===mode?'active':'','aria-pressed':String(state.scheduleMode===mode),onclick:()=>{state.scheduleMode=mode;if(upcoming)state.date=start;render();}},label)));
+  const toolbar=el('div',{class:'toolbar'},modes,button('‹',()=>{state.date=addDays(state.date,state.scheduleMode==='day'?-1:-7);render();},'outline small',{'aria-label':'이전 기간',disabled:upcoming}),dateInput,button('›',()=>{state.date=addDays(state.date,state.scheduleMode==='day'?1:7);render();},'outline small',{'aria-label':'다음 기간',disabled:upcoming}),button('오늘',()=>{state.date=seoulToday();state.scheduleMode='day';render();},'secondary small'),button('새로고침',()=>visibleRefresh.run(),'outline small'));
+  const status=syncStatus();
+  container.append(toolbar,el('div',{class:'schedule-range'},el('strong',{},`조회 기간 · ${start}${start===end?'':` ~ ${end}`}`),el('span',{},'모든 회원 · 전화 예약')),status.node);
+  const body=el('div',{},loading());container.append(body);
+  let lastItems=null,inFlight=null;
+  const update=()=>{
+    if(inFlight)return inFlight;
+    if(upcoming&&(start!==seoulToday()||end!==addDays(start,Number(state.session.settings.booking_window_days)))){render();return Promise.resolve();}
+    inFlight=(async()=>{
+      try{
+        const data=await api(`/bookings?from=${start}&to=${end}`);
+        if(version!==renderVersion||dialog.open)return;
+        const signature=JSON.stringify(data.items);
+        if(signature!==lastItems){
+          const confirmed=data.items.filter(item=>item.status==='confirmed');
+          const stats=el('div',{class:'stat-row'},[['확정 예약',confirmed.length],['취소된 예약',data.items.length-confirmed.length],['예약된 시간',`${confirmed.length*.5}시간`]].map(([title,value])=>el('div',{class:'card stat'},el('span',{},title),el('strong',{},value))));
+          body.replaceChildren(stats);
+          if(upcoming&&!data.items.length)body.append(empty('이 기간에 등록된 예약이 없어요. 손님이 예약하면 여기에 표시돼요.'));
+          for(let date=start;date<=end;date=addDays(date,1)){
+            const items=data.items.filter(item=>item.date===date).sort((a,b)=>a.start_time.localeCompare(b.start_time));
+            if(upcoming&&!items.length)continue;
+            body.append(el('section',{class:'day-group section-space'},el('h3',{},dateLabel(date)),el('div',{class:'stack'},...(items.length?items.map(item=>bookingCard(item,{admin:true})):[empty('이 날짜에 등록된 예약이 없어요.')]))));
+          }
+          lastItems=signature;
+        }
+        status.success();
+      }catch(error){if(version===renderVersion){status.failure(error);if(lastItems===null)body.replaceChildren(empty('예약 목록을 아직 불러오지 못했어요. 새로고침해 주세요.'));}}
+    })().finally(()=>{inFlight=null;});
+    return inFlight;
+  };
+  refreshPage=update;showRefreshError=status.failure;
+  await update();
 }
 function manualBooking(){
   const memberSelect=el('select',{name:'user_id'},el('option',{value:''},'전화 · 현장 고객 (계정 연결 없음)'));
@@ -390,7 +516,7 @@ function addBlock(){
 }
 
 async function renderUsers(container,version){
-  container.append(pageHead('OUR MEMBERS','회원 관리','가입을 처음 한 번 승인하면, 회원은 이후 직접 로그인하고 예약할 수 있어요.',el('div',{class:'actions'},el('a',{class:'btn outline',href:'/api/admin/members.csv',download:'jinSling-members.csv'},'회원 CSV 다운로드'),button('＋ 초대 링크',createInvite,'secondary'))));
+  container.append(pageHead('OUR MEMBERS','회원 관리','가입을 처음 한 번 승인하면, 회원은 이후 직접 로그인하고 예약할 수 있어요.',el('div',{class:'actions'},button('예약 안내 · QR',publicShareDialog),button('＋ 1회용 초대',createInvite,'secondary'),el('a',{class:'btn outline',href:'/api/admin/members.csv',download:'jinSling-members.csv'},'회원 CSV 다운로드'))));
   const content=el('div',{class:'stack'},loading());container.append(content);
   const [users,invites]=await Promise.all([api('/admin/users'),api('/admin/invites')]);if(version!==renderVersion)return;
   const pending=users.items.filter(user=>user.status==='pending');
@@ -406,7 +532,7 @@ async function renderUsers(container,version){
     tbody.append(el('tr',{},el('td',{class:'member-username'},user.username||'설정 전'),el('td',{},el('strong',{},user.name),el('br'),el('small',{},user.role==='admin'?'관리자':'고객')),el('td',{},user.phone||'—'),el('td',{},badge(user.status),user.password_reset_required?el('small',{class:'reset-required'},'비밀번호 재설정 필요'):null),el('td',{},el('small',{},timestamp(user.created_at))),el('td',{},actions)));
   }
   table.append(tbody);members.append(el('div',{class:'table-scroll'},table));
-  const inviteCard=el('section',{class:'card'},el('div',{class:'card-head'},el('h2',{},'초대 링크 기록 (선택)'),el('small',{},'유효기간 7일 · 한 번 사용')),el('p',{class:'muted'},'회원은 초대 링크 없이도 가입할 수 있어요. 초대 링크로 가입해도 첫 승인은 필요해요.'));
+  const inviteCard=el('section',{class:'card'},el('div',{class:'card-head'},el('h2',{},'1회용 초대 기록 (선택)'),el('small',{},'유효기간 7일 · 한 번 사용')),el('p',{class:'muted'},'여러 분께 안내할 때는 위의 예약 안내 · QR을 사용해 주세요. 1회용 초대는 한 분께 전달하는 링크와 이미지예요. 어느 방법이든 가입 후 첫 승인은 필요해요.'));
   if(!invites.items.length)inviteCard.append(empty('아직 만든 초대 링크가 없어요.'));
   else{
     const list=el('div',{class:'stack'});
@@ -423,22 +549,40 @@ function changeUserStatus(user,status){
   confirmation(`${user.name}님 ${statusLabels[status]}`,status==='approved'?'이 회원이 예약 서비스를 이용할 수 있도록 승인할까요? 승인 후에는 별도 승인 없이 직접 로그인하고 예약할 수 있어요.':status==='rejected'?'이 회원의 가입을 거절할까요?': '이 회원의 예약 서비스 이용을 중지할까요? 기존 예약은 일정 화면에서 따로 확인해 주세요.',statusLabels[status],async()=>{await api(`/admin/users/${encodeURIComponent(user.id)}`,{method:'PATCH',body:{status}});render();notify('회원 상태를 변경했어요.');});
 }
 function issuePasswordReset(user){
+  const selfReset=user.id===state.session.user.id;
+  const actorAccess=sessionAccessKey(state.session);
   const content=el('div',{},el('p',{},`${user.name}님 (${user.username})의 비밀번호 재설정 링크를 만들까요? 발급 즉시 모든 로그인과 이전 재설정 링크가 종료되고, 새 비밀번호를 정할 때까지 일반 로그인이 차단돼요.`),el('p',{class:'note'},'링크는 24시간 동안 한 번 사용할 수 있어요. 회원 정보, 예약, 승인 상태는 그대로 유지돼요.'),user.id===state.session.user.id?el('p',{class:'inline-info'},'내 계정의 재설정 링크를 발급하면 현재 관리자 로그인도 종료돼요. 표시되는 링크를 보관해 주세요.'):null);
   const errorArea=el('div');let busy=false;
   const submit=button('재설정 링크 만들기',async()=>{
     if(busy)return;busy=true;submit.disabled=true;
+    if(selfReset){
+      dialog.dataset.holdSession='true';
+      dialog.oncancel=event=>event.preventDefault();
+      dialog.querySelectorAll('button').forEach(node=>{node.disabled=true;});
+    }
     try{
       const result=await api(`/admin/users/${encodeURIComponent(user.id)}/reset-password`,{method:'POST'});
+      if(actorAccess!==sessionAccessKey(state.session))return;
       // The one-time plaintext token must be shown before any refresh request.
-      secretDialog(`${user.name}님 비밀번호 재설정`,`${window.location.origin}/#reset=${encodeURIComponent(result.reset_token)}`,{expiresAt:result.expires_at,onClose:refreshSession});
-    }catch(error){inlineError(errorArea,error);submit.disabled=false;busy=false;}
+      secretDialog(`${user.name}님 비밀번호 재설정`,`${window.location.origin}/#reset=${encodeURIComponent(result.reset_token)}`,{expiresAt:result.expires_at,onClose:refreshSession,holdSession:selfReset});
+    }catch(error){
+      if(actorAccess!==sessionAccessKey(state.session))return;
+      dialog.dataset.holdSession='false';dialog.oncancel=null;
+      if(selfReset)dialog.querySelectorAll('button').forEach(node=>{node.disabled=false;});
+      inlineError(errorArea,error);submit.disabled=false;busy=false;
+    }
   });
   content.append(errorArea,el('div',{class:'dialog-actions'},button('돌아가기',()=>dialog.close(),'secondary'),submit));openDialog('비밀번호 재설정 링크 발급',content);
 }
 let inviteBusy=false;
 async function createInvite(){
   if(inviteBusy)return;inviteBusy=true;
-  try{const result=await api('/admin/invites',{method:'POST'});secretDialog('새 초대 링크',`${window.location.origin}/#invite=${encodeURIComponent(result.invite_token)}`,{invite:true,onClose:render});}catch(error){notify(error.message,true);}finally{inviteBusy=false;}
+  const actorAccess=sessionAccessKey(state.session);
+  try{
+    const result=await api('/admin/invites',{method:'POST'});
+    if(actorAccess!==sessionAccessKey(state.session))return;
+    secretDialog('1회용 초대 · QR 이미지',`${window.location.origin}/#invite=${encodeURIComponent(result.invite_token)}`,{invite:true,expiresAt:result.expires_at,onClose:render});
+  }catch(error){if(actorAccess===sessionAccessKey(state.session))notify(error.message,true);}finally{inviteBusy=false;}
 }
 function timestamp(value){
   if(!value)return '—';

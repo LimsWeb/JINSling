@@ -38,7 +38,7 @@ export function normalizeUsername(value) {
 }
 export function validateNewPassword(password, confirmation) {
   const length = typeof password === 'string' ? Array.from(password).length : 0;
-  if (length < 15 || length > 128) throw new Error('비밀번호는 15–128자로 입력해 주세요.');
+  if (length < 12 || length > 128) throw new Error('비밀번호는 12–128자로 입력해 주세요.');
   if (password !== confirmation) throw new Error('비밀번호와 비밀번호 확인이 일치하지 않아요.');
   return password;
 }

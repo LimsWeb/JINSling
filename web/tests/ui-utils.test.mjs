@@ -66,9 +66,12 @@ test('usernames normalize case and surrounding space but reject unsafe or ambigu
 test('new passwords preserve Unicode and spaces and count characters rather than UTF16 units',()=>{
   const password='  나의 긴 비밀번호 🌿🌿🌿🌿  ';
   assert.equal(accountUi.validateNewPassword(password,password),password);
-  assert.equal(accountUi.validateNewPassword('🌿'.repeat(15),'🌿'.repeat(15)),'🌿'.repeat(15));
+  const boundaryWithSpaces=' '+'🌿'.repeat(10)+' ';
+  assert.equal(accountUi.validateNewPassword(boundaryWithSpaces,boundaryWithSpaces),boundaryWithSpaces);
+  assert.equal(accountUi.validateNewPassword('a'.repeat(15),'a'.repeat(15)),'a'.repeat(15));
+  assert.equal(accountUi.validateNewPassword('🌿'.repeat(12),'🌿'.repeat(12)),'🌿'.repeat(12));
   assert.equal(accountUi.validateNewPassword('🌿'.repeat(128),'🌿'.repeat(128)),'🌿'.repeat(128));
-  assert.throws(()=>accountUi.validateNewPassword('🌿'.repeat(14),'🌿'.repeat(14)),/15/);
+  assert.throws(()=>accountUi.validateNewPassword('🌿'.repeat(11),'🌿'.repeat(11)),/12/);
   assert.throws(()=>accountUi.validateNewPassword('a'.repeat(129),'a'.repeat(129)),/128/);
 });
 test('password confirmation is exact and errors never include a password value',()=>{

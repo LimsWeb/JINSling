@@ -99,7 +99,7 @@ export function createPasswordAuth(env) {
 function passwordValue(value) {
   if (typeof value !== 'string') throw new AuthProviderError('INVALID_CREDENTIALS');
   const length = Array.from(value).length;
-  if (length < 15 || length > 128) throw new AuthProviderError('INVALID_CREDENTIALS');
+  if (length < 12 || length > 128) throw new AuthProviderError('INVALID_CREDENTIALS');
   return value; // Whitespace and Unicode are meaningful; never trim passwords.
 }
 

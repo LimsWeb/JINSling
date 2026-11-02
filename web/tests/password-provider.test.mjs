@@ -246,3 +246,43 @@ test('development passwords remain strong, private, case-normalized, and usable 
     await assert.rejects(local.auth.verifyPassword({ username: 'member_01', password: changed }), hasCode('INVALID_CREDENTIALS'));
   } finally { local.close(); rmSync(folder, { recursive: true, force: true }); }
 });
+
+
+test('production password validation accepts 12–128 Unicode characters and preserves exact values',async t=>{
+ const provider=auth(),submitted=[];
+ t.mock.method(globalThis,'fetch',async(url,init)=>{
+  if(String(url)==='https://oauth2.googleapis.com/token')return json({access_token:'oauth-token-secret',token_type:'Bearer',expires_in:3600});
+  const body=JSON.parse(init.body);submitted.push(body.password);
+  return String(url).endsWith('accounts:update')?json({localId:'firebase-user-1'}):json(identity());
+ });
+ for(const candidate of [' '+'🌿'.repeat(10)+' ','a'.repeat(15),'🌿'.repeat(128)]){
+  assert.deepEqual(await provider.createUser({username:'member_01',password:candidate}),{uid:'firebase-user-1'});
+  assert.deepEqual(await provider.verifyPassword({username:'member_01',password:candidate}),{uid:'firebase-user-1'});
+  assert.equal(await provider.setPassword({uid:'firebase-user-1',password:candidate}),undefined);
+  assert.deepEqual(submitted.slice(-3),[candidate,candidate,candidate]);
+ }
+ for(const candidate of ['🌿'.repeat(11),'🌿'.repeat(129)]){
+  await assert.rejects(provider.createUser({username:'member_01',password:candidate}),hasCode('INVALID_CREDENTIALS'));
+  await assert.rejects(provider.verifyPassword({username:'member_01',password:candidate}),hasCode('INVALID_CREDENTIALS'));
+  await assert.rejects(provider.setPassword({uid:'firebase-user-1',password:candidate}),hasCode('INVALID_CREDENTIALS'));
+ }
+ assert.equal(submitted.length,9,'invalid lengths must not be sent to the provider');
+});
+
+test('development password validation accepts 12 characters, rejects 11 and retains the 128-character limit',async()=>{
+ const local=development.createDevelopmentAuth(),twelve=' '+'🌿'.repeat(10)+' ',upper='🌿'.repeat(128);
+ try {
+  const member=await local.auth.createUser({username:'twelve_member',password:twelve});
+  assert.deepEqual(await local.auth.verifyPassword({username:'twelve_member',password:twelve}),member);
+  await assert.rejects(local.auth.verifyPassword({username:'twelve_member',password:twelve.trim()}),hasCode('INVALID_CREDENTIALS'));
+  for(const candidate of ['🌿'.repeat(11),'🌿'.repeat(129)]){
+   await assert.rejects(local.auth.createUser({username:'invalid_member',password:candidate}),hasCode('INVALID_CREDENTIALS'));
+   await assert.rejects(local.auth.setPassword({uid:member.uid,password:candidate}),hasCode('INVALID_CREDENTIALS'));
+  }
+  assert.deepEqual(await local.auth.verifyPassword({username:'twelve_member',password:twelve}),member,'invalid changes must preserve the previous verifier');
+  await local.auth.setPassword({uid:member.uid,password:upper});
+  assert.deepEqual(await local.auth.verifyPassword({username:'twelve_member',password:upper}),member);
+  await local.auth.setPassword({uid:member.uid,password:'a'.repeat(15)});
+  assert.deepEqual(await local.auth.verifyPassword({username:'twelve_member',password:'a'.repeat(15)}),member,'15-character passwords remain usable');
+ } finally {local.close();}
+});

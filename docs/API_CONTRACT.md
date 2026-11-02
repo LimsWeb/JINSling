@@ -51,7 +51,7 @@ Weekly rule: `{weekday,closed,open_time,close_time,daily_limit}`; weekday Sunday
 
 ## Account security boundaries
 
-- Username is 4–32 ASCII letters/digits/underscores, normalized to lowercase. Password is 15–128 Unicode code points; do not trim or normalize it. Password confirmation is a UI-only field.
+- Username is 4–32 ASCII letters/digits/underscores, normalized to lowercase. Password is 12–128 Unicode code points; do not trim or normalize it. Password confirmation is a UI-only field.
 - Approval is required once, not on each login. Pending users may log in and see their own status; approved members can reserve independently. Every protected request checks current status and credential revision.
 - Legacy key sessions can only inspect their session, log out, and choose a password. Converted accounts never accept their old key.
 - Reset tokens have 256 bits of randomness, expire after 24 hours, and are stored only as hashes. The UI consumes URL fragments immediately, including same-document navigation. Owner reset issuance blocks password login until completion.

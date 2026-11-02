@@ -1,8 +1,8 @@
-# Implementation status — 2026-10-30, account update
+# Implementation status — 2026-11-02, pilot handoff
 
 ## Authorized outcome
 
-The user requested username/password signup with one owner approval, ordinary unattended later login, owner administrator operations, more than five members, owner-only production data management, and a future AI reservation path. Strict zero monetary cost and no always-on local server remain requirements. This update implements that account change in the isolated `jinSling-v2` worktree on `feat/free-pilot`; the original Python source is retained.
+The current operating agreement is that the developer handles deployment and cloud maintenance, while the shop owner is the sole application administrator for member approval and daily scheduling. The developer retains technical cloud/deployment authority; the app does not make production data technically inaccessible to the developer. Transferring the cloud accounts is optional, not a launch prerequisite. Strict zero monetary cost and no always-on local server remain requirements.
 
 ## Implemented
 
@@ -13,23 +13,27 @@ The user requested username/password signup with one owner approval, ordinary un
 - Default account admission 100, configurable up to 1,000, independent of the four/five-person first trial and daily appointment limits. Registration can be closed.
 - Owner member table and CSV; public shop phone is separate from the owner's private profile phone.
 - Existing member-linked manual bookings, schedule changes, cancellations, daily caps, breaks, audit and reservation CSV retained.
-- Owner-controlled deployment/data handoff and Google Sheets manual CSV option documented. No automatic Sheets synchronization or AI model was activated.
+- Developer-maintained deployment and owner application operations are documented separately. The Google Sheets manual CSV option remains unchanged.
+
+## Current pilot and patch status
+
+The user has confirmed initial administrator registration and customer signup/approval on the operating site. The reported missing reservation has no confirmed root cause; a test querying the same booking date succeeds. Do not describe that report as proven data loss or a fixed production defect.
+
+- Application password minimum is now 12 Unicode code points, maximum 128. Spaces and existing longer passwords remain valid. The Firebase console policy was not inspected or changed; if its minimum is still 15, the maintainer must align it to 12 and verify the live flow.
+- Member management now offers a reusable public booking QR/PNG and optional seven-day, single-signup invitation QR/PNG. Cards are generated locally without an external QR service. Image download and link copy are separate actions: text inside a PNG is not clickable.
+- The administrator schedule defaults to upcoming bookings from today through the booking window, with one-day and seven-day views. Visible pages refresh every 30 seconds and recheck on focus/reconnection; the UI shows the last sync. The administrator’s personal list is explicitly labelled “내 계정 예약”.
 
 ## Verification
 
-Final automated test results and browser evidence are recorded in [VERIFICATION.md](VERIFICATION.md). The integrated suite includes 16 account tests, 14 API/reservation tests, 10 provider tests and 11 UI utility tests. A separate reviewer examined provider identity trust, credential races, migration, offline recovery, UI and final handoff documents.
+Dated evidence is recorded in [VERIFICATION.md](VERIFICATION.md). The root integrator reran the final code: 76/76 tests passed, all 26 JavaScript files passed syntax checks, and `git diff --check` passed. Existing reservation atomicity, optimistic versions, blocks, daily limits and duplicate-request protection remain covered. Independent review identified two P2 issues, both corrected; follow-up review found no outstanding material findings.
 
-The developer preview successfully upgraded the previous synthetic key-based accounts in place. Browser checks confirmed username-only forms, pending state, independent approved-member login, owner account controls and default100 setting, member-linked manual reservation appearing in the customer's list, and immediate reset fragment clearing on an already loaded page.
+Real Chromium with the local API, SQLite and synthetic authentication confirmed nine browser flows, including cross-session refresh, failed-connection recovery, form preservation, sharing and reset races. A subsequent mobile check exposed an 883px-wide member table; after the grid fix, separate 390px-viewport and 350px-dialog checks passed. Native-canvas QR decoding passed eight cases; the production-URL PNG also decoded correctly at 1080px and 540px. See the [public booking card](screenshots/booking-share-qr.png).
 
-## Production boundaries
+## Operating boundaries and remaining checks
 
-- **Not deployed to the shop owner's Cloudflare or Firebase account.** Publishing this source to GitHub does not provision hosting or grant access to production data; no cloud account, payment method or paid plan was created.
-- Live acceptance of `jinsling-auth.invalid` Firebase aliases, owner-project permissions, actual Google signup/login/reset, hosted D1 and production HTTPS cookies still require verification.
-- Cloudflare Free CPU/request and D1 usage must be measured at launch. The app's maximum1,000 stored-account setting is not a capacity benchmark.
-- Firebase and D1 are separate services. Unknown credential mutations stay locked; owner recovery is documented. Partial signup failures can leave an unlinked provider account requiring verified cleanup.
-- Actual owner/developer access separation is a deployment condition, not something code alone completes. Owner controls production source/release, cloud accounts, secrets, logs and backups.
-- Physical mobile use and the first four/five-person trial remain launch acceptance tasks.
+- Confirm the live 12-character Firebase policy and exercise password change/reset once on an agreed test account.
+- On the owner's phone, confirm the same reservation date, refresh/tab-return behavior, and scanning a shared PNG. Then try a small end-to-end reservation/change/cancel flow with the first four/five people.
+- Cloudflare Free CPU/request and D1 usage still need operating observation. The app's maximum 1,000 stored-account setting is not a capacity benchmark.
+- Firebase and D1 are separate services. Unknown credential mutations stay locked for the documented maintainer recovery procedure. Partial signup failures can leave an unlinked provider account requiring verified cleanup.
 
-## Next concrete operating step
-
-The owner creates or selects their own Cloudflare Free and Firebase Spark projects, keeps billing unlinked, applies the migrations, registers secrets privately, and runs the live acceptance steps in [DEPLOY_FREE.md](DEPLOY_FREE.md). Development continues with synthetic data and the owner accepts reviewed releases into their controlled production repository.
+The developer maintains releases, cloud configuration and backups. The owner receives the operating URL, application instructions, and a maintenance contact, and handles approvals and schedules. Account transfer is not needed to complete this handoff. See [DEPLOY_FREE.md](DEPLOY_FREE.md) and [OWNER_DATA.md](OWNER_DATA.md).

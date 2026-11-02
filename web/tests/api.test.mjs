@@ -25,6 +25,21 @@ async function approve(s,a,u) { assert.equal((await req(s,'PATCH',`/api/admin/us
 function dateAhead(weekday=1,offset=1) { const d=new Date(Date.now()+9*3600000); d.setUTCHours(0,0,0,0); d.setUTCDate(d.getUTCDate()+offset); while(d.getUTCDay()!==weekday)d.setUTCDate(d.getUTCDate()+1); return d.toISOString().slice(0,10); }
 async function book(s,a,time='09:00',date=dateAhead(),extra={}) { return req(s,'POST','/api/bookings',{date,start_time:time,memo:'테스트',...extra},a.cookie); }
 
+// Independent SQLite connections share a start gate, so these tests exercise
+// database write contention rather than Promise.all on one synchronous binding.
+async function raceStatements(filename,statements) {
+ const gate=new SharedArrayBuffer(4);
+ const workers=statements.map(statement=>new Worker(new URL('./race-worker.mjs',import.meta.url),{execArgv:[],workerData:{filename,gate,...statement}}));
+ try {
+  const exits=workers.map(worker=>new Promise(resolve=>worker.once('exit',resolve)));
+  const message=worker=>new Promise((resolve,reject)=>{worker.once('error',reject);worker.once('message',resolve);});
+  assert.deepEqual(await Promise.all(workers.map(message)),statements.map(()=>'ready'));
+  const results=workers.map(message);
+  Atomics.store(new Int32Array(gate),0,1);Atomics.notify(new Int32Array(gate),0);
+  const out=await Promise.all(results);await Promise.all(exits);return out;
+ }finally{await Promise.all(workers.map(worker=>worker.terminate()));}
+}
+
 test('bootstrap is explicit, single use; credentials stay private and cookies are secure',async()=>{const s=setup();try{
   assert.equal((await req(s,'POST','/api/bootstrap',{setup_token:'wrong',name:'A',phone:'01012345678'})).status,403);
   const a=await boot(s);assert.equal(a.data.login_key,undefined);assert.equal(a.data.user.username,'shop_owner');
@@ -71,6 +86,41 @@ test('booking ownership, optimistic updates, idempotency, cancellation and CSV p
  assert.equal((await book(s,v)).status,200);
 }finally{s.close();}});
 
+test('approved member booking appears in the same-date admin schedule and owner list, never another member list',async()=>{const s=setup();try{
+ const a=await boot(s),u=await member(s,a),other=await member(s,a,'다른 회원');
+ const date=dateAhead(),path=`/api/bookings?from=${date}&to=${date}`;
+ assert.equal((await book(s,u,'09:00',date)).status,403);
+ await approve(s,a,u);await approve(s,a,other);
+ const created=await book(s,u,'09:00',date,{memo:'관리자가 확인할 회원 예약',request_id:crypto.randomUUID()});
+ assert.equal(created.status,200,JSON.stringify(created.error));
+ const [adminList,ownerList,otherList]=await Promise.all([req(s,'GET',path,undefined,a.cookie),req(s,'GET',path,undefined,u.cookie),req(s,'GET',path,undefined,other.cookie)]);
+ for(const result of [adminList,ownerList,otherList]){assert.equal(result.status,200);assert.equal(result.response.headers.get('cache-control'),'no-store');}
+ for(const result of [adminList,ownerList]){
+  assert.equal(result.data.items.length,1);
+  assert.equal(result.data.items[0].id,created.data.booking.id);
+  assert.equal(result.data.items[0].user_id,u.data.user.id);
+  assert.equal(result.data.items[0].date,date);
+  assert.equal(result.data.items[0].status,'confirmed');
+ }
+ assert.deepEqual(otherList.data.items,[]);
+}finally{s.close();}});
+
+test('simultaneous member API requests for one slot return 200 and 409 and store one audited reservation',async()=>{const s=setup();try{
+ const a=await boot(s),u=await member(s,a),other=await member(s,a,'경쟁 회원');await approve(s,a,u);await approve(s,a,other);
+ const date=dateAhead();
+ // This covers API error mapping and distinct request IDs. Independent-connection
+ // SQLite contention is covered by the worker tests below.
+ const results=await Promise.all([u,other].map(actor=>book(s,actor,'09:00',date,{request_id:crypto.randomUUID()})));
+ assert.deepEqual(results.map(result=>result.status).sort((x,y)=>x-y),[200,409]);
+ assert.equal(results.find(result=>result.status===409).error.code,'conflict');
+ const winner=results.find(result=>result.status===200).data.booking;
+ const rows=s.sqlite.prepare("SELECT id,user_id FROM bookings WHERE date=? AND start_min=540 AND status='confirmed'").all(date);
+ assert.equal(rows.length,1);assert.equal(rows[0].id,winner.id);assert.equal(rows[0].user_id,winner.user_id);
+ assert.equal(s.sqlite.prepare("SELECT count(*) n FROM audit_log WHERE entity_type='booking' AND action='create'").get().n,1);
+ const adminList=await req(s,'GET',`/api/bookings?from=${date}&to=${date}`,undefined,a.cookie);
+ assert.equal(adminList.status,200);assert.deepEqual(adminList.data.items.map(item=>item.id),[winner.id]);
+}finally{s.close();}});
+
 test('database enforces overlap, 18/10 capacity, grid, valid dates, future, hours and blocks atomically',async()=>{const s=setup();try{
  const a=await boot(s),day=dateAhead();
  for(let i=0;i<18;i++){const t=`${String(9+Math.floor(i/2)).padStart(2,'0')}:${i%2?'30':'00'}`;assert.equal((await book(s,a,t,day)).status,200);}
@@ -110,12 +160,43 @@ test('SQLite adapter rolls back batches and persists across reopen',async()=>{as
  const a=await boot(s);await book(s,a);await assert.rejects(s.binding.batch([s.binding.prepare("UPDATE settings SET shop_name='rollback' WHERE id=1"),s.binding.prepare('INSERT INTO missing_table VALUES (1)')]));assert.notEqual(s.sqlite.prepare('SELECT shop_name FROM settings').get().shop_name,'rollback');s.close();s=createTestDatabase(path);assert.equal(s.sqlite.prepare('SELECT count(*) n FROM bookings').get().n,1);
 }finally{s.close();rmSync(dir,{recursive:true,force:true});}});
 
-test('separate SQLite worker connections serialize simultaneous slot inserts to one reservation',{timeout:10000},async(t)=>{assert.equal(typeof createTestDatabase,'function');const dir=mkdtempSync(join(tmpdir(),'jinsling-race-'));const filename=join(dir,'db.sqlite');const s={...createTestDatabase(filename)};s.env={DB:s.binding,BOOTSTRAP_TOKEN:'explicit-setup-secret',AUTH:createTestAuth().auth};try{
- const a=await boot(s),date=dateAhead(),gate=new SharedArrayBuffer(4);const sql="INSERT INTO bookings (id,user_id,customer_name,phone,date,start_min,end_min,start_time,end_time,memo,status,version,updated_by) VALUES (?,?,?,?,?,540,570,'09:00','09:30','','confirmed',1,?)";
- const workers=[1,2].map(i=>new Worker(new URL('./race-worker.mjs',import.meta.url),{execArgv:[],workerData:{filename,gate,sql,args:[crypto.randomUUID(),a.data.user.id,'race','01012345678',date,a.data.user.id]}}));
- t.after(()=>Promise.all(workers.map(w=>w.terminate())));const exits=workers.map(w=>new Promise(r=>w.once('exit',r)));
- const ready=workers.map(w=>new Promise((resolve,reject)=>{w.once('error',reject);w.once('message',resolve);}));await Promise.all(ready);const results=workers.map(w=>new Promise((resolve,reject)=>{w.once('error',reject);w.once('message',resolve);}));Atomics.store(new Int32Array(gate),0,1);Atomics.notify(new Int32Array(gate),0);const out=await Promise.all(results);await Promise.all(exits);assert.equal(out.filter(x=>x.ok).length,1);assert.equal(s.sqlite.prepare('SELECT count(*) n FROM bookings').get().n,1);
+test('separate SQLite worker connections serialize simultaneous slot inserts to one reservation',{timeout:10000},async()=>{assert.equal(typeof createTestDatabase,'function');const dir=mkdtempSync(join(tmpdir(),'jinsling-race-'));const filename=join(dir,'db.sqlite');const s={...createTestDatabase(filename)};s.env={DB:s.binding,BOOTSTRAP_TOKEN:'explicit-setup-secret',AUTH:createTestAuth().auth};try{
+ const a=await boot(s),date=dateAhead();const sql="INSERT INTO bookings (id,user_id,customer_name,phone,date,start_min,end_min,start_time,end_time,memo,status,version,updated_by) VALUES (?,?,?,?,?,540,570,'09:00','09:30','','confirmed',1,?)";
+ const out=await raceStatements(filename,[1,2].map(()=>({sql,args:[crypto.randomUUID(),a.data.user.id,'race','01012345678',date,a.data.user.id]})));
+ assert.equal(out.filter(x=>x.ok).length,1);assert.match(out.find(x=>!x.ok).error,/slot_conflict/);assert.equal(s.sqlite.prepare('SELECT count(*) n FROM bookings').get().n,1);
 }finally{s.close();rmSync(dir,{recursive:true,force:true});}});
+
+test('independent SQLite connections competing at different times admit only the final daily-cap place',{timeout:10000},async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'jinsling-cap-race-')),filename=join(dir,'db.sqlite'),db=createTestDatabase(filename);
+ const s={...db,env:{DB:db.binding,BOOTSTRAP_TOKEN:'explicit-setup-secret',AUTH:createTestAuth().auth}};
+ try{
+  const a=await boot(s),date=dateAhead();
+  for(let i=0;i<17;i++)assert.equal((await book(s,a,`${String(9+Math.floor(i/2)).padStart(2,'0')}:${i%2?'30':'00'}`,date)).status,200);
+  const sql="INSERT INTO bookings(id,user_id,customer_name,phone,date,start_min,end_min,start_time,end_time,status,updated_by) VALUES (?,?,'capacity race','01012345678',?,?,?,?,?,'confirmed',?)";
+  const out=await raceStatements(filename,[{start:1050,end:1080,startTime:'17:30',endTime:'18:00'},{start:1080,end:1110,startTime:'18:00',endTime:'18:30'}].map(slot=>({sql,args:[crypto.randomUUID(),a.data.user.id,date,slot.start,slot.end,slot.startTime,slot.endTime,a.data.user.id]})));
+  assert.equal(out.filter(result=>result.ok).length,1);assert.match(out.find(result=>!result.ok).error,/daily_limit/);
+  assert.equal(s.sqlite.prepare("SELECT count(*) n FROM bookings WHERE date=? AND status='confirmed'").get(date).n,18);
+  assert.equal(s.sqlite.prepare("SELECT count(*) n FROM bookings WHERE date=? AND start_min IN (1050,1080) AND status='confirmed'").get(date).n,1);
+  assert.equal(s.sqlite.prepare("SELECT count(*) n FROM audit_log WHERE entity_type='booking' AND action='create'").get().n,18);
+ }finally{s.close();rmSync(dir,{recursive:true,force:true});}
+});
+
+test('independent SQLite booking and admin-block writes cannot both claim an overlapping interval',{timeout:10000},async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'jinsling-block-race-')),filename=join(dir,'db.sqlite'),db=createTestDatabase(filename);
+ const s={...db,env:{DB:db.binding,BOOTSTRAP_TOKEN:'explicit-setup-secret',AUTH:createTestAuth().auth}};
+ try{
+  const a=await boot(s),date=dateAhead(2);
+  const out=await raceStatements(filename,[
+   {sql:"INSERT INTO bookings(id,user_id,customer_name,phone,date,start_min,end_min,start_time,end_time,status,updated_by) VALUES (?,?,'block race','01012345678',?,540,570,'09:00','09:30','confirmed',?)",args:[crypto.randomUUID(),a.data.user.id,date,a.data.user.id]},
+   {sql:"INSERT INTO blocks(id,date,start_time,end_time,start_min,end_min,note,created_by) VALUES (?,?,'09:00','09:30',540,570,'race block',?)",args:[crypto.randomUUID(),date,a.data.user.id]}
+  ]);
+  assert.equal(out.filter(result=>result.ok).length,1);assert.match(out.find(result=>!result.ok).error,/block_conflict/);
+  const bookings=s.sqlite.prepare("SELECT count(*) n FROM bookings WHERE date=? AND status='confirmed'").get(date).n;
+  const blocks=s.sqlite.prepare('SELECT count(*) n FROM blocks WHERE date=? AND deleted_at IS NULL').get(date).n;
+  assert.equal(bookings+blocks,1);
+  assert.equal(s.sqlite.prepare("SELECT count(*) n FROM audit_log WHERE entity_type IN ('booking','block') AND action='create'").get().n,1);
+ }finally{s.close();rmSync(dir,{recursive:true,force:true});}
+});
 
 test('expired and revoked invites and sessions are refused; password change replaces cookie and audit never contains secrets',async()=>{const s=setup();try{
  const a=await boot(s);const inv=await req(s,'POST','/api/admin/invites',{},a.cookie);assert.match(inv.data.expires_at,/T.*Z$/);assert.equal((await req(s,'DELETE',`/api/admin/invites/${inv.data.id}`,{},a.cookie)).status,200);
