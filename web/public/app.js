@@ -1,11 +1,12 @@
 import {WEEKDAYS,seoulToday,addDays,dateLabel,consumeAuthFragment,listenForAuthFragments,normalizeUsername,validateNewPassword,canCustomerChange,parseTimestamp,createRequestId} from './ui-utils.mjs';
 import {startVisibleRefresh,sessionAccessKey} from './page-refresh.mjs';
 import {renderShareCard,shareCardBlob} from './share-card.mjs';
+import {copyShareText} from './share-link.mjs';
 
 let {inviteToken,resetToken} = consumeAuthFragment(window.location, window.history);
 const app = document.querySelector('#app');
 const dialog = document.querySelector('#dialog');
-const state = {session:null,page:'reserve',date:seoulToday(),slot:null,availability:null,preview:[],calendarMonth:seoulToday().slice(0,7),scheduleMode:'upcoming'};
+const state = {session:null,page:'reserve',date:seoulToday(),slot:null,availability:null,availabilityReady:false,reserveMemo:'',preview:[],calendarMonth:seoulToday().slice(0,7),scheduleMode:'upcoming'};
 let renderVersion = 0;
 let refreshPage = null;
 let showRefreshError = null;
@@ -89,29 +90,49 @@ function openDialog(title,content,options={}) {
   dialog.onclose = () => {if(dialog.open)return;dialog.replaceChildren();options.onClose?.();void visibleRefresh.run();};
   dialog.showModal();
 }
-function confirmation(title,text,submitText,action) {
+function confirmation(title,text,submitText,action,{onConflict}={}) {
   const content = el('div',{},el('p',{},text));
   const errorArea = el('div');
+  let conflict=false;
+  const current=()=>dialog.open&&dialog.contains(content);
   const accept = button(submitText,async()=>{
+    if(conflict){dialog.close();return;}
     if(accept.disabled)return;accept.disabled=true;accept.textContent='처리 중…';
-    try{await action();dialog.close();}catch(error){inlineError(errorArea,error);accept.disabled=false;accept.textContent=submitText;}
+    try{await action();if(current())dialog.close();}catch(error){
+      if(!current())return;
+      conflict=Boolean(onConflict&&error.status===409&&error.code==='conflict');
+      inlineError(errorArea,conflict?new Error('이 시간은 먼저 예약되었거나 운영 일정이 바뀌었어요. 다른 시간을 선택해 주세요.'):error);
+      accept.disabled=false;accept.textContent=conflict?'다른 시간 선택':submitText;
+      if(conflict)void onConflict();
+    }
   });
   content.append(errorArea,el('div',{class:'dialog-actions'},button('돌아가기',()=>dialog.close(),'secondary'),accept));
   openDialog(title,content);
 }
+function shareLinkControls(url){
+  const input=el('textarea',{class:'share-url',readonly:true,rows:2,spellcheck:'false','aria-label':'공유 주소'},url);
+  const manual=el('details',{class:'share-manual'},el('summary',{},'주소 직접 선택 · 복사'),input);
+  const feedback=el('p',{class:'note',role:'status'});
+  const copy=button('링크 복사',async()=>{
+    const wasOpen=manual.open;manual.open=true;
+    const result=await copyShareText(url,{selectionInput:input});
+    if(result==='copied'){manual.open=wasOpen;feedback.textContent='링크를 복사했어요. 이미지와 함께 전달해 주세요.';}
+    else feedback.textContent='주소를 선택했어요. Ctrl+C 또는 길게 눌러 복사해 주세요.';
+  },'outline');
+  return el('section',{class:'share-link-controls'},
+    el('a',{class:'secret-value share-link-anchor',href:url,target:'_blank',rel:'noopener noreferrer','aria-label':'공유 주소 열기 · 새 탭'},url),
+    el('div',{class:'actions'},copy),manual,feedback);
+}
 function secretDialog(title,secret,{invite=false,expiresAt,onClose,holdSession=false}={}) {
   const description=invite ? '이 초대 링크는 7일 동안 한 번 사용할 수 있어요. 초대할 분에게 직접 전달해 주세요.' : '이 재설정 링크는 24시간 동안 한 번 사용할 수 있어요. 지금 한 번만 표시되므로 본인에게 안전하게 전달해 주세요. 비밀번호는 본인이 직접 정해요.';
-  const content = el('div',{},el('div',{class:'secret-warning'},description),expiresAt?el('p',{class:'note'},`사용 기한 · ${timestamp(expiresAt)} (서울)`):null,el('div',{class:'secret-value',tabindex:'0'},secret));
+  const content = el('div',{},el('div',{class:'secret-warning'},description),expiresAt?el('p',{class:'note'},`사용 기한 · ${timestamp(expiresAt)} (서울)`):null,shareLinkControls(secret));
   const feedback=el('p',{class:'muted',role:'status'});
-  const copy=button('링크 복사',async()=>{
-    try {await navigator.clipboard.writeText(secret);feedback.textContent='복사했어요. 안전한 곳에 보관해 주세요.';}catch{feedback.textContent='자동 복사를 사용할 수 없어요. 위 내용을 선택해서 직접 복사해 주세요.';}
-  },'secondary');
   const save=button('파일로 보관',()=>{
     const blob=new Blob([`${title}\n${secret}\n${expiresAt?`사용 기한: ${timestamp(expiresAt)} (서울)\n`:''}\n${invite?'초대할 분에게만 전달해 주세요.':'해당 회원 본인에게만 전달해 주세요. 24시간 동안 한 번 사용할 수 있어요.'}\n`],{type:'text/plain;charset=utf-8'});
     const url=URL.createObjectURL(blob);const link=el('a',{href:url,download:invite?'jinSling-invite.txt':'jinSling-password-reset.txt'});link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);feedback.textContent='저장한 파일을 안전하게 보관해 주세요.';
   },'outline');
   if(invite)content.append(shareCardPanel(secret,'invite',expiresAt));
-  content.append(el('div',{class:'actions'},copy,save),feedback,el('div',{class:'dialog-actions'},button('보관했어요',()=>dialog.close())));
+  content.append(el('div',{class:'actions'},save),feedback,el('div',{class:'dialog-actions'},button('보관했어요',()=>dialog.close())));
   // Self-reset invalidates the current cookie; keep its one-time link until saved.
   openDialog(title,content,{onClose,holdSession});
 }
@@ -122,7 +143,7 @@ function downloadBlob(blob,filename){
   setTimeout(()=>URL.revokeObjectURL(url),10_000);
 }
 function shareCardPanel(url,kind,expiresAt){
-  const preview=el('div',{class:'share-card-preview'},loading());
+  const preview=el('a',{class:'share-card-preview',href:url,target:'_blank',rel:'noopener noreferrer','aria-label':`${kind==='invite'?'초대':'예약'} QR 이미지로 주소 열기 · 새 탭`},loading());
   const feedback=el('p',{class:'note',role:'status'});
   let canvas;
   const save=button('이미지 저장 (PNG)',async()=>{
@@ -142,19 +163,14 @@ function shareCardPanel(url,kind,expiresAt){
 }
 function publicShareDialog(){
   const url=`${window.location.origin}/`;
-  const feedback=el('p',{class:'note',role:'status'});
-  const copy=button('링크 복사',async()=>{
-    try{await navigator.clipboard.writeText(url);feedback.textContent='예약 주소를 복사했어요. 이미지와 함께 보내 주세요.';}
-    catch{feedback.textContent='위 주소를 선택해 직접 복사해 주세요.';}
-  },'outline');
   openDialog('예약 안내 · QR 이미지',el('div',{},
     el('p',{},'여러 손님에게 계속 안내할 수 있는 공용 예약 주소예요. 처음 가입하면 사장님의 승인이 필요해요.'),
-    el('div',{class:'secret-value',tabindex:'0'},url),
-    shareCardPanel(url,'public'),copy,feedback,
-    el('p',{class:'note'},'사진 속 주소는 클릭되지 않아요. 링크도 함께 보내면 바로 눌러 접속할 수 있어요.')
+    shareLinkControls(url),shareCardPanel(url,'public'),
+    el('p',{class:'note'},'이 화면의 주소나 QR 이미지를 누르면 새 탭에서 열려요. 저장한 PNG를 보낼 때는 복사한 링크도 함께 보내 주세요.')
   ));
 }
 function finishAuthentication(result,message){
+  state.slot=null;state.availability=null;state.availabilityReady=false;state.reserveMemo='';
   state.session={...state.session,configured:true,user:result.user};
   inviteToken=null;resetToken=null;
   state.page=result.user.role==='admin'?'schedule':'reserve';
@@ -184,7 +200,7 @@ async function refreshVisiblePage(){
     dialog.onclose=null;
     if(dialog.open)dialog.close();
     dialog.replaceChildren();
-    state.slot=null;state.availability=null;
+    state.slot=null;state.availability=null;state.availabilityReady=false;state.reserveMemo='';
     state.page=latest.user?.role==='admin'?'schedule':'reserve';
     render();notify('로그인 상태가 바뀌어 화면을 다시 불러왔어요.');
     return;
@@ -279,7 +295,7 @@ function renderPending(){
   const title=user.status==='pending'?'승인을 기다리고 있어요':'현재 예약을 이용할 수 없어요';
   app.replaceChildren(el('main',{class:'workspace'},brand(),el('section',{class:'card pending-card'},el('span',{class:'brand-mark','aria-hidden':'true'},'j.'),badge(user.status),el('h1',{class:'section-space'},title),el('p',{},`${user.name}님, ${user.status==='pending'?'사장님의 가입 승인을 기다려 주세요. 승인은 처음 한 번만 필요해요.':'자세한 내용은 사장님에게 문의해 주세요.'}`),el('p',{class:'muted'},`아이디 · ${user.username}`),el('p',{class:'muted'},contactNote()),el('div',{class:'actions'},button('승인 상태 확인',refreshSession),button('비밀번호 변경',changePassword,'outline'),button('로그아웃',logout,'outline')))));
 }
-async function logout(){try{await api('/auth/logout',{method:'POST'});state.session.user=null;inviteToken=null;resetToken=null;renderAuth('login');}catch(error){notify(error.message,true);}}
+async function logout(){try{await api('/auth/logout',{method:'POST'});state.session.user=null;state.slot=null;state.availability=null;state.availabilityReady=false;state.reserveMemo='';inviteToken=null;resetToken=null;renderAuth('login');}catch(error){notify(error.message,true);}}
 function changePassword(){
   if(!state.session.auth_ready){notify('로그인 서비스 연결을 확인한 후 비밀번호를 변경해 주세요.',true);return;}
   openDialog('내 비밀번호 변경',form([usernameField(state.session.user.username,true),field('현재 비밀번호','current_password','password','',{required:true,autocomplete:'current-password'}),...newPasswordFields('new_password'),el('p',{class:'note'},'변경하면 다른 기기의 로그인은 종료되고, 이 기기에서 계속 사용할 수 있어요.')],'비밀번호 변경',async values=>{
@@ -303,56 +319,123 @@ function renderShell(){
   page(content,version).catch(error=>{if(version===renderVersion)errorPage(content,error,render);});
 }
 
-function calendar(){
+function calendar(days=[]){
   const month=state.calendarMonth;
   const [year,monthNum]=month.split('-').map(Number);
   const first=new Date(`${month}-01T12:00:00Z`).getUTCDay();
   const count=new Date(Date.UTC(year,monthNum,0)).getUTCDate();
   const today=seoulToday();const last=addDays(today,Number(state.session.settings.booking_window_days));
-  const root=el('div');
-  const move=amount=>{const value=new Date(Date.UTC(year,monthNum-1+amount,1));state.calendarMonth=value.toISOString().slice(0,7);render();};
-  root.append(el('div',{class:'calendar-head'},button('‹',()=>move(-1),'icon-button',{'aria-label':'이전 달'}),el('strong',{},`${year}년 ${monthNum}월`),button('›',()=>move(1),'icon-button',{'aria-label':'다음 달'})));
+  const root=el('div');const byDate=new Map(days.map(day=>[day.date,day]));
+  const adjacent=amount=>new Date(Date.UTC(year,monthNum-1+amount,1)).toISOString().slice(0,7);
+  const move=amount=>{
+    state.calendarMonth=adjacent(amount);state.date=state.calendarMonth===today.slice(0,7)?today:`${state.calendarMonth}-01`;
+    state.slot=null;render();
+  };
+  root.append(el('div',{class:'calendar-head'},button('‹',()=>move(-1),'icon-button',{'aria-label':'이전 달',disabled:adjacent(-1)<today.slice(0,7)}),el('strong',{},`${year}년 ${monthNum}월`),button('›',()=>move(1),'icon-button',{'aria-label':'다음 달',disabled:adjacent(1)>last.slice(0,7)})));
   const grid=el('div',{class:'calendar-grid','aria-label':`${year}년 ${monthNum}월 날짜 선택`});
   WEEKDAYS.forEach(day=>grid.append(el('div',{class:'calendar-weekday'},day)));
   for(let i=0;i<first;i++)grid.append(el('span',{'aria-hidden':'true'}));
   for(let day=1;day<=count;day++){
     const date=`${month}-${String(day).padStart(2,'0')}`;
-    grid.append(el('button',{type:'button',class:`calendar-day${date===state.date?' selected':''}${date===today?' today':''}`,disabled:date<today||date>last,'aria-label':dateLabel(date,true),'aria-pressed':String(date===state.date),onclick:()=>{state.date=date;state.slot=null;render();}},day));
+    const value=byDate.get(date),outside=date<today||date>last;
+    const label=outside?'':!value?'확인 중':value.status==='closed'?'휴무':value.status==='full'?'마감':value.booked_count?`예약 ${value.booked_count}`:'예약 가능';
+    const status=value?.status||'loading';
+    grid.append(el('button',{type:'button',class:`calendar-day ${status}${date===state.date?' selected':''}${date===today?' today':''}`,'data-date':date,disabled:outside,'aria-label':`${dateLabel(date,true)}${label?` · ${label}`:''}`,'aria-pressed':String(date===state.date),onclick:()=>{state.date=date;state.slot=null;render();}},el('span',{class:'calendar-number'},day),el('span',{class:'calendar-status'},label)));
   }
-  root.append(grid,el('div',{class:'calendar-legend'},el('span',{},el('i',{class:'legend-circle'}),'선택한 날짜'),el('span',{},`오늘부터 ${state.session.settings.booking_window_days}일 후까지 예약 가능`)));
+  root.append(grid,el('div',{class:'calendar-legend'},el('span',{},el('i',{class:'legend-circle'}),'선택한 날짜'),el('span',{},`오늘부터 ${state.session.settings.booking_window_days}일 후까지 예약 가능`)),el('p',{class:'note'},'모든 회원이 같은 예약 현황을 봐요. 다른 분의 이름과 연락처는 표시하지 않아요.'));
   return root;
 }
 async function renderReserve(container,version){
-  container.append(pageHead('MAKE A LITTLE TIME','예약하기','원하는 날짜와 시간을 선택해 주세요. 한 번의 예약은 30분이에요.'));
-  const left=el('section',{class:'card'},el('div',{class:'card-head'},el('h2',{},'01 날짜 선택'),el('small',{},'Asia / Seoul')),calendar());
+  const today=seoulToday(),last=addDays(today,Number(state.session.settings.booking_window_days));
+  if(state.date<today||state.date>last){state.date=today;state.slot=null;}
+  state.calendarMonth=state.date.slice(0,7);state.availability=null;state.availabilityReady=false;
+  const selectedDate=state.date,month=state.calendarMonth;
+  const actorAccess=sessionAccessKey(state.session);
+  container.append(pageHead('MAKE A LITTLE TIME','예약하기','날짜를 눌러 예약된 시간과 빈 시간을 확인해 주세요. 한 번의 예약은 30분이에요.',button('새로고침',()=>visibleRefresh.run(),'outline')));
+  const sync=syncStatus('예약 현황');container.append(sync.node);
+  const monthView=el('div',{class:'month-view'},calendar());
+  const left=el('section',{class:'card'},el('div',{class:'card-head'},el('h2',{},'01 날짜 선택'),el('small',{},'서울 시간')),monthView);
   const slotsSection=el('section',{class:'slots-section'},el('div',{class:'card-head'},el('h2',{},'02 시간 선택'),el('small',{},'예약 가능한 시간')),loading());left.append(slotsSection);
   const summary=el('aside',{class:'stack'});container.append(el('div',{class:'split'},left,summary));
-  renderSummary(summary);
-  const availability=await api(`/availability?date=${encodeURIComponent(state.date)}`);
-  if(version!==renderVersion)return;
-  state.availability=availability;
-  if(!availability.slots.some(slot=>slot.start_time===state.slot&&slot.available))state.slot=null;
-  const grid=el('div',{class:'slot-grid'});
-  for(const slot of availability.slots)grid.append(el('button',{type:'button',class:`slot${state.slot===slot.start_time?' selected':''}`,disabled:!slot.available,'aria-pressed':String(state.slot===slot.start_time),'aria-label':`${slot.start_time}부터 ${slot.end_time}까지${slot.available?' 예약 가능':' 예약 불가'}`,onclick:event=>{
-    state.slot=slot.start_time;grid.querySelectorAll('button').forEach(node=>{node.classList.remove('selected');node.setAttribute('aria-pressed','false');});event.currentTarget.classList.add('selected');event.currentTarget.setAttribute('aria-pressed','true');renderSummary(summary);
-  }},slot.start_time));
-  slotsSection.replaceChildren(el('div',{class:'card-head'},el('h2',{},'02 시간 선택'),el('small',{},`${availability.booked_count} / ${availability.daily_limit}건`)),availability.closed||!availability.slots.length ? empty(availability.reason || '이 날은 쉬어 가요. 다른 날짜를 선택해 주세요.') : grid);
-  if(availability.reason&&!availability.closed&&availability.slots.length)slotsSection.append(el('p',{class:'note'},availability.reason));
-  renderSummary(summary);
+  const disableSlots=label=>slotsSection.querySelectorAll('.slot').forEach(node=>{
+    node.disabled=true;node.classList.remove('selected');node.setAttribute('aria-pressed','false');
+    if(node.classList.contains('available'))node.querySelector('.slot-status').textContent=label;
+  });
+  const summaryView=renderSummary(summary,()=>{
+    if(version!==renderVersion||actorAccess!==sessionAccessKey(state.session))return;
+    state.slot=null;state.availabilityReady=false;disableSlots('다시 확인 중');summaryView.update();return update(true);
+  });
+  let inFlight=null,signature='',refreshRevision=0;
+  const failure=()=>{
+    if(version!==renderVersion)return;
+    state.availabilityReady=false;state.slot=null;summaryView.update();sync.failure();
+    disableSlots('확인 필요');
+    if(!state.availability)slotsSection.replaceChildren(empty('예약 현황을 확인하지 못했어요. 위의 새로고침을 눌러 다시 확인해 주세요.'));
+  };
+  const update=(forceFresh=false)=>{
+    if(version!==renderVersion||actorAccess!==sessionAccessKey(state.session))return Promise.resolve();
+    // A conflict invalidates reads started before it. Wait for that read to settle,
+    // then fetch again; never paint its formerly-free slot as current availability.
+    if(forceFresh){refreshRevision++;if(inFlight)return inFlight.then(()=>update());}
+    if(inFlight)return inFlight;
+    const revision=refreshRevision;
+    inFlight=(async()=>{
+      try{
+        const [availability,calendarData]=await Promise.all([api(`/availability?date=${encodeURIComponent(selectedDate)}`),api(`/availability/calendar?month=${encodeURIComponent(month)}`)]);
+        if(version!==renderVersion||revision!==refreshRevision||actorAccess!==sessionAccessKey(state.session)||!container.isConnected)return;
+        const previousSlot=state.slot,wasReady=state.availabilityReady;
+        state.availability=availability;state.availabilityReady=true;
+        if(!availability.slots.some(slot=>slot.start_time===state.slot&&slot.available))state.slot=null;
+        // The selected day's detailed response is authoritative for its month tile.
+        const days=calendarData.days.map(day=>day.date===selectedDate?availability:day);
+        const nextSignature=JSON.stringify([availability,days]);
+        if(signature!==nextSignature||!wasReady){
+          signature=nextSignature;
+          const focusDate=monthView.contains(document.activeElement)?document.activeElement.dataset.date:null;
+          const focusTime=slotsSection.contains(document.activeElement)?document.activeElement.dataset.time:null;
+          monthView.replaceChildren(calendar(days));
+          const grid=el('div',{class:'slot-grid'});
+          const labels={available:'예약 가능',booked:'예약됨',blocked:'운영자 차단',past:'지난 시간',full:'일일 마감'};
+          for(const slot of availability.slots){
+            const status=slot.status||(slot.available?'available':'booked'),label=labels[status]||'예약 불가';
+            grid.append(el('button',{type:'button',class:`slot ${status}${state.slot===slot.start_time?' selected':''}`,'data-time':slot.start_time,disabled:!slot.available,'aria-pressed':String(state.slot===slot.start_time),'aria-label':`${slot.start_time}부터 ${slot.end_time}까지 ${label}`,onclick:event=>{
+              state.slot=slot.start_time;grid.querySelectorAll('button').forEach(node=>{node.classList.remove('selected');node.setAttribute('aria-pressed','false');});event.currentTarget.classList.add('selected');event.currentTarget.setAttribute('aria-pressed','true');summaryView.update();
+            }},el('strong',{},slot.start_time),el('span',{class:'slot-status'},label)));
+          }
+          slotsSection.replaceChildren(el('div',{class:'card-head'},el('h2',{},'02 시간 선택'),el('small',{},`예약 ${availability.booked_count} / 하루 ${availability.daily_limit}건`)),el('p',{class:'selected-slot-date'},dateLabel(selectedDate,true)),availability.closed||!availability.slots.length?empty(availability.reason||'이 날은 쉬어 가요. 다른 날짜를 선택해 주세요.'):grid);
+          if(availability.reason&&!availability.closed&&availability.slots.length)slotsSection.append(el('p',{class:'note'},availability.reason));
+          if(focusDate)monthView.querySelector(`[data-date="${focusDate}"]`)?.focus({preventScroll:true});
+          if(focusTime)slotsSection.querySelector(`[data-time="${focusTime}"]:enabled`)?.focus({preventScroll:true});
+        }
+        summaryView.update();sync.success();
+        if(previousSlot&&!state.slot)notify('선택한 시간이 마감됐어요. 다른 시간을 골라 주세요.');
+      }catch{if(revision===refreshRevision)failure();}
+    })().finally(()=>{inFlight=null;});
+    return inFlight;
+  };
+  refreshPage=update;showRefreshError=failure;
+  await update();
 }
-function renderSummary(container){
-  const summary=el('section',{class:'card booking-summary'},el('div',{class:'card-head'},el('h2',{},'나의 예약'),el('span',{class:'accent-tag'},'30분의 여유')),el('div',{class:'summary-label'},'선택한 날짜'),el('div',{class:'summary-date'},dateLabel(state.date)),el('div',{class:'summary-time'},state.slot || '시간을 골라 주세요',state.slot?el('span',{class:'duration'},'30분'):null));
-  const memo=field('전달할 메모 (선택)','memo','textarea','',{placeholder:'방문 전에 전할 내용을 남겨 주세요.',maxlength:1000});
+function renderSummary(container,onConflict){
+  const selectedTime=el('div',{class:'summary-time'});
+  const summary=el('section',{class:'card booking-summary'},el('div',{class:'card-head'},el('h2',{},'나의 예약'),el('span',{class:'accent-tag'},'30분의 여유')),el('div',{class:'summary-label'},'선택한 날짜'),el('div',{class:'summary-date'},dateLabel(state.date,true)),selectedTime);
+  const memo=field('전달할 메모 (선택)','memo','textarea',state.reserveMemo,{placeholder:'방문 전에 전할 내용을 남겨 주세요.',maxlength:1000});
+  memo.querySelector('textarea').addEventListener('input',event=>{state.reserveMemo=event.target.value;});
   const book=button('예약 내용 확인',()=>{
+    if(!state.slot||!state.availabilityReady)return;
+    const version=renderVersion,actorAccess=sessionAccessKey(state.session);
     const selected={date:state.date,start_time:state.slot,memo:memo.querySelector('textarea').value,request_id:createRequestId()};
-    confirmation('이 시간으로 예약할까요?',`${dateLabel(selected.date)} ${selected.start_time} · 30분\n예약이 저장되면 확정 내역을 확인할 수 있어요.`,'예약 확정하기',async()=>{
+    confirmation('이 시간으로 예약할까요?',`${dateLabel(selected.date,true)} ${selected.start_time} · 30분\n예약이 저장되면 확정 내역을 확인할 수 있어요.`,'예약 확정하기',async()=>{
       const result=await api('/bookings',{method:'POST',body:selected});
-      state.page='mine';render();notify(`${result.booking.date} ${result.booking.start_time} 예약이 확정됐어요.`);
-    });
-  },'full',{disabled:!state.slot});
+      if(version!==renderVersion||actorAccess!==sessionAccessKey(state.session))return;
+      state.reserveMemo='';state.slot=null;state.page='mine';render();notify(`${result.booking.date} ${result.booking.start_time} 예약이 확정됐어요.`);
+    },{onConflict});
+  },'full',{disabled:true});
   const cutoff=Number(state.session.settings.cancel_before_minutes);
   summary.append(memo,el('div',{class:'section-space'},book),el('p',{class:'note'},`예약 취소는 ${cutoff===0?'예약 시작 전까지':`시작 ${cutoff}분 전까지`} 가능해요. 변경이 필요하면 예약을 취소하고 다시 선택하거나 매장에 문의해 주세요.`));
   container.replaceChildren(summary,el('section',{class:'hint-card'},el('h3',{},'방문 전, 확인해 주세요'),el('p',{},'같은 시간에는 한 분만 예약할 수 있어요.',el('br'),'선택한 시간은 예약 확정 시 다시 확인해요.',el('br'),contactNote())));
+  const update=()=>{selectedTime.replaceChildren(state.slot||'시간을 골라 주세요',state.slot?el('span',{class:'duration'},'30분'):el('span',{'aria-hidden':'true'}));book.disabled=!state.slot||!state.availabilityReady;};
+  update();return {update};
 }
 
 function bookingCard(booking,{admin=false}={}){
@@ -402,8 +485,8 @@ function editBooking(booking,admin){
   openDialog(admin?'일정 · 메모 변경':'메모 수정',form(fields,'변경 내용 저장',async values=>{await api(`/bookings/${encodeURIComponent(booking.id)}`,{method:'PATCH',body:{version:booking.version,...values}});dialog.close();render();notify('예약 변경 내용을 저장했어요.');}));
 }
 
-function syncStatus(){
-  const node=el('p',{class:'sync-status',role:'status'},'예약 목록을 확인하고 있어요…');
+function syncStatus(subject='예약 목록'){
+  const node=el('p',{class:'sync-status',role:'status'},`${subject}을 확인하고 있어요…`);
   let lastSuccess='';
   return {
     node,
@@ -411,7 +494,7 @@ function syncStatus(){
       lastSuccess=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date());
       node.classList.remove('sync-error');node.textContent=`마지막 확인 ${lastSuccess} · 화면을 보고 있을 때 30초마다 갱신해요.`;
     },
-    failure(){node.classList.add('sync-error');node.textContent=`최신 예약을 확인하지 못했어요. 연결을 확인하고 새로고침해 주세요.${lastSuccess?` 마지막 확인 ${lastSuccess}의 목록을 표시하고 있어요.`:''}`;},
+    failure(){node.classList.add('sync-error');node.textContent=`최신 예약을 확인하지 못했어요. 연결을 확인하고 새로고침해 주세요.${lastSuccess?` 마지막 확인 ${lastSuccess}의 정보를 표시하고 있어요.`:''}`;},
   };
 }
 async function renderSchedule(container,version){

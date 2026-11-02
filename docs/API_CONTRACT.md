@@ -19,7 +19,8 @@ Weekly rule: `{weekday,closed,open_time,close_time,daily_limit}`; weekday Sunday
 | POST /api/auth/logout | `{}` | `{}` and expired cookie |
 | POST /api/auth/invite-info | `{invite_token}` | `{valid,expires_at}` |
 | POST /api/auth/join | `{name,phone,username,password,invite_token?}` | `{user}` and cookie; pending approval, invitation optional when registration open |
-| GET /api/availability?date=... | approved user | `{date,slots:[{start_time,end_time,available}],booked_count,daily_limit,closed,reason}` |
+| GET /api/availability?date=... | approved user | `{date,slots:[{start_time,end_time,available,status}],booked_count,daily_limit,available_count,closed,status,reason}` |
+| GET /api/availability/calendar?month=YYYY-MM | approved user | `{month,days:[{date,booked_count,daily_limit,available_count,closed,status,reason}]}`; one bounded calendar month |
 | GET /api/bookings?from=...&to=... | approved user | `{items:[Booking]}`; own only unless admin, default today onward window |
 | POST /api/bookings | `{date,start_time,memo,customer_name?,phone?,user_id?,request_id?}` | `{booking}`; admin may manually book |
 | PATCH /api/bookings/:id | `{version,date?,start_time?,memo?,customer_name?,phone?}` | `{booking}`; user may edit own memo only |
@@ -45,6 +46,9 @@ Weekly rule: `{weekday,closed,open_time,close_time,daily_limit}`; weekday Sunday
 - Optional `request_id` on create is a UUID generated once per form submission; retry with the same request_id and identical authenticated owner/payload returns the original reservation, never another booking. Reuse with different payload returns conflict.
 - Test/development adapter: export `createTestDatabase(filename=":memory:")` from `web/tests/sqlite-d1.mjs`; returns `{binding,sqlite,close}`. It tracks ordered schema migrations and upgrades an existing 0001 database without resetting records. `binding` implements D1, `sqlite` is the native DatabaseSync.
 - Public UI can use `date`, `start_time`, `end_time` as strings. No minute integers leak into the API contract.
+- Availability is shared by all approved members and the administrator. It includes every confirmed reservation and active operator block for the exact date, including telephone bookings; it never includes names, phone numbers, account/booking IDs, or private notes. Personal booking lists retain their existing ownership filter.
+- Availability day status is `available|full|closed|unavailable`; slot status is `available|booked|blocked|past|full`. `available_count` is the number of selectable start times, not the remaining daily booking allowance. Occupied slots remain `booked` when the daily cap is reached. Cancelled bookings and deleted blocks reopen their slots, subject to the remaining rules.
+- Calendar availability accepts a real `YYYY-MM` only and returns 28–31 summaries. It reads weekly rules and the month's anonymous booking/block intervals in three bounded queries rather than one query per day. Each response captures Seoul time once. The displayed state is informational; database constraints recheck overlap and capacity atomically at booking creation.
 - Admin block DELETE means soft delete with acting user recorded.
 - Admin settings save includes the complete seven weekly rules and all six settings. Default settings: shop_name jinSling 예약; contact_phone empty; booking_window_days 30; cancel_before_minutes 0; member_limit 100; registration_open true. Member limit accepts 1–1,000, counts all stored accounts, and cannot be lowered below current count.
 - New bookings/corrected slot must be strictly in the future. Customer memo edits/cancellations are allowed only before the start/cancel cutoff. Admin may correct or cancel historical records.

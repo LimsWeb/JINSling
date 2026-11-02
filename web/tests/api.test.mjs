@@ -121,6 +121,73 @@ test('simultaneous member API requests for one slot return 200 and 409 and store
  assert.equal(adminList.status,200);assert.deepEqual(adminList.data.items.map(item=>item.id),[winner.id]);
 }finally{s.close();}});
 
+test('every approved account sees the same anonymous occupied calendar, and cancellation reopens that exact date',async()=>{const s=setup();try{
+ const a=await boot(s),u=await member(s,a,'예약한 회원'),other=await member(s,a,'조회하는 회원');
+ const date=dateAhead(),later=dateAhead(1,8),month=date.slice(0,7),dayPath=`/api/availability?date=${date}`,monthPath=`/api/availability/calendar?month=${month}`;
+ assert.equal((await req(s,'GET',dayPath,undefined,u.cookie)).status,403);
+ assert.equal((await req(s,'GET',monthPath,undefined,u.cookie)).status,403);
+ assert.equal((await req(s,'GET',monthPath)).status,401);
+ await approve(s,a,u);await approve(s,a,other);
+ const created=await book(s,u,'11:00',date,{memo:'다른 회원에게 숨길 메모',request_id:crypto.randomUUID()});assert.equal(created.status,200);
+ const manual=await book(s,a,'10:00',date,{customer_name:'전화 예약만 한 손님',phone:'010-0000-1234',memo:'비공개 전화 메모'});assert.equal(manual.status,200);assert.equal(manual.data.booking.user_id,null);
+ const blocked=await req(s,'POST','/api/admin/blocks',{date,start_time:'12:00',end_time:'13:00',note:'비공개 운영자 메모'},a.cookie);assert.equal(blocked.status,200);
+ const days=await Promise.all([a,u,other].map(actor=>req(s,'GET',dayPath,undefined,actor.cookie)));
+ for(const result of days){
+  assert.equal(result.status,200);assert.equal(result.response.headers.get('cache-control'),'no-store');
+  assert.deepEqual(result.data,days[0].data);
+  assert.equal(result.data.booked_count,2);assert.equal(result.data.available_count,18);
+  assert.equal(result.data.slots.find(slot=>slot.start_time==='10:00').status,'booked');
+  assert.deepEqual(result.data.slots.find(slot=>slot.start_time==='11:00'),{start_time:'11:00',end_time:'11:30',available:false,status:'booked'});
+  assert.equal(result.data.slots.find(slot=>slot.start_time==='12:00').status,'blocked');
+  assert.equal(result.data.slots.find(slot=>slot.start_time==='12:30').available,false);
+  assert.equal(result.data.slots.find(slot=>slot.start_time==='11:30').status,'available');
+  assert.deepEqual(Object.keys(result.data).sort(),['date','slots','booked_count','daily_limit','available_count','closed','status','reason'].sort());
+  for(const slot of result.data.slots)assert.deepEqual(Object.keys(slot).sort(),['start_time','end_time','available','status'].sort());
+ }
+ const calendars=await Promise.all([a,u,other].map(actor=>req(s,'GET',monthPath,undefined,actor.cookie)));
+ for(const result of calendars){
+  assert.equal(result.status,200);assert.deepEqual(result.data,calendars[0].data);
+  assert.equal(result.response.headers.get('cache-control'),'no-store');assert.equal(result.data.month,month);
+  assert.ok(result.data.days.length>=28&&result.data.days.length<=31);
+  const day=result.data.days.find(day=>day.date===date);
+  assert.deepEqual(day,{date,booked_count:2,daily_limit:18,available_count:18,closed:false,status:'available',reason:''});
+  for(const item of result.data.days)assert.deepEqual(Object.keys(item).sort(),['date','booked_count','daily_limit','available_count','closed','status','reason'].sort());
+  const serialized=JSON.stringify(result.data);
+  for(const secret of [u.data.user.id,created.data.booking.id,manual.data.booking.id,'예약한 회원','다른 회원에게 숨길 메모','비공개 운영자 메모','010-2345-6789','전화 예약만 한 손님','010-0000-1234','비공개 전화 메모'])assert.ok(!serialized.includes(secret));
+ }
+ assert.equal((await book(s,other,'11:00',date,{request_id:crypto.randomUUID()})).status,409);
+ assert.equal((await book(s,other,'11:00',later,{request_id:crypto.randomUUID()})).status,200,'same time on a different date is a valid separate reservation');
+ const cancelled=await req(s,'POST',`/api/bookings/${created.data.booking.id}/cancel`,{version:1},u.cookie);assert.equal(cancelled.status,200);
+ const reopened=(await req(s,'GET',dayPath,undefined,other.cookie)).data;
+ assert.equal(reopened.booked_count,1);assert.equal(reopened.slots.find(slot=>slot.start_time==='11:00').status,'available');
+ assert.equal((await req(s,'GET',monthPath,undefined,other.cookie)).data.days.find(day=>day.date===date).booked_count,1);
+ assert.equal((await req(s,'DELETE',`/api/admin/blocks/${blocked.data.block.id}`,{},a.cookie)).status,200);
+ const unblocked=(await req(s,'GET',dayPath,undefined,other.cookie)).data;
+ assert.equal(unblocked.slots.find(slot=>slot.start_time==='12:00').status,'available');assert.equal(unblocked.available_count,21);
+ assert.equal((await book(s,other,'11:00',date,{request_id:crypto.randomUUID()})).status,200);
+}finally{s.close();}});
+
+test('availability distinguishes capacity, occupied slots, closures and invalid month requests',async()=>{const s=setup();try{
+ const a=await boot(s),date=dateAhead(),month=date.slice(0,7);
+ const settings=(await req(s,'GET','/api/admin/settings',undefined,a.cookie)).data;
+ settings.weekly_rules[1].daily_limit=1;assert.equal((await req(s,'PUT','/api/admin/settings',settings,a.cookie)).status,200);
+ assert.equal((await book(s,a,'11:00',date)).status,200);
+ const day=(await req(s,'GET',`/api/availability?date=${date}`,undefined,a.cookie)).data;
+ assert.equal(day.status,'full');assert.equal(day.available_count,0);assert.equal(day.closed,false);
+ assert.equal(day.slots.find(slot=>slot.start_time==='11:00').status,'booked');
+ assert.equal(day.slots.find(slot=>slot.start_time==='11:30').status,'full');
+ const calendar=(await req(s,'GET',`/api/availability/calendar?month=${month}`,undefined,a.cookie)).data;
+ assert.equal(calendar.days.find(day=>day.date===date).status,'full');
+ const sunday=dateAhead(0),closed=(await req(s,'GET',`/api/availability?date=${sunday}`,undefined,a.cookie)).data;
+ assert.equal(closed.status,'closed');assert.equal(closed.closed,true);assert.deepEqual(closed.slots,[]);
+ const outside=(await req(s,'GET','/api/availability?date=2020-01-01',undefined,a.cookie)).data;
+ assert.equal(outside.status,'unavailable');assert.equal(outside.closed,true);assert.equal(outside.available_count,0);
+ for(const value of ['', '2026-1','2026-00','2026-13','2026-11-01','anything','2026-11&to=2030-12']){
+  assert.equal((await req(s,'GET',`/api/availability/calendar?month=${encodeURIComponent(value)}`,undefined,a.cookie)).status,400,value);
+ }
+ assert.equal((await req(s,'GET','/api/availability/calendar?month=2028-02',undefined,a.cookie)).data.days.length,29);
+}finally{s.close();}});
+
 test('database enforces overlap, 18/10 capacity, grid, valid dates, future, hours and blocks atomically',async()=>{const s=setup();try{
  const a=await boot(s),day=dateAhead();
  for(let i=0;i<18;i++){const t=`${String(9+Math.floor(i/2)).padStart(2,'0')}:${i%2?'30':'00'}`;assert.equal((await book(s,a,t,day)).status,200);}

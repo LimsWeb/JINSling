@@ -1,5 +1,6 @@
 import {ApiError,fail,defaults,publicUser,publicBooking,publicSettings,publicRule,publicBlock,publicTimestamps,utc,token,hash,uuid,cookie,today,seoulNow,addDays,text,phone,integer,validDate,minute,time,version,only,readJson,securityHeaders,json,errorResponse,sqlError,csvResponse} from './support.mjs';
 import {accountSession,accountRoutes,issuePasswordReset,passwordAuthReady} from './accounts.mjs';
+import {calendarMonthDates,dayAvailability} from './availability.mjs';
 
 export async function handleApi(request,env,ctx={}) {
  try{return await route(request,env);}catch(error){try{sqlError(error);}catch(mapped){return errorResponse(mapped);}return errorResponse(error);}
@@ -28,11 +29,19 @@ async function route(request,env){
  const bookingById=async id=>{const b=await first('SELECT * FROM bookings WHERE id=?',id);if(!b||(user.role!=='admin'&&b.user_id!==user.id))fail(404,'not_found','예약을 찾을 수 없습니다.');return b;};
  const cutoff=b=>{if(user.role!=='admin'&&Date.parse(`${b.date}T${b.start_time}:00+09:00`)-settings.cancel_before_minutes*60000<=Date.now())fail(409,'cutoff','예약 변경 및 취소 가능 시간이 지났습니다.');};
  if(method==='GET'&&path==='/api/availability'){
-  const date=validDate(url.searchParams.get('date')),weekday=new Date(date+'T00:00:00Z').getUTCDay(),rule=await first('SELECT * FROM weekly_rules WHERE weekday=?',weekday);
-  const bookings=await all("SELECT start_min,end_min FROM bookings WHERE date=? AND status='confirmed'",date),blocks=await all('SELECT start_min,end_min FROM blocks WHERE date=? AND deleted_at IS NULL',date);
-  const closed=!!rule.closed||date<today()||date>addDays(today(),settings.booking_window_days),reason=rule.closed?'휴무일입니다.':closed?'예약 가능 기간이 아닙니다.':bookings.length>=rule.daily_limit?'일일 예약 한도에 도달했습니다.':'';const slots=[];
-  if(!closed)for(let n=rule.open_min;n+30<=rule.close_min;n+=30)slots.push({start_time:time(n),end_time:time(n+30),available:date+' '+time(n)>seoulNow()&&bookings.length<rule.daily_limit&&![...bookings,...blocks].some(x=>x.start_min<n+30&&x.end_min>n)});
-  return json({date,slots,booked_count:bookings.length,daily_limit:rule.daily_limit,closed,reason});
+  const date=validDate(url.searchParams.get('date')),weekday=new Date(date+'T00:00:00Z').getUTCDay(),now=seoulNow();
+  const [rule,bookings,blocks]=await Promise.all([first('SELECT * FROM weekly_rules WHERE weekday=?',weekday),all("SELECT start_min,end_min FROM bookings WHERE date=? AND status='confirmed'",date),all('SELECT start_min,end_min FROM blocks WHERE date=? AND deleted_at IS NULL',date)]);
+  return json(dayAvailability({date,rule,bookings,blocks,settings,now}));
+ }
+ if(method==='GET'&&path==='/api/availability/calendar'){
+  const month=url.searchParams.get('month'),dates=calendarMonthDates(month),from=dates[0],to=dates.at(-1),now=seoulNow();
+  const [weekly,bookings,blocks]=await Promise.all([rules(),all("SELECT date,start_min,end_min FROM bookings WHERE date BETWEEN ? AND ? AND status='confirmed'",from,to),all('SELECT date,start_min,end_min FROM blocks WHERE date BETWEEN ? AND ? AND deleted_at IS NULL',from,to)]);
+  const grouped=rows=>{const map=new Map();for(const row of rows){if(!map.has(row.date))map.set(row.date,[]);map.get(row.date).push(row);}return map;};
+  const byWeekday=new Map(weekly.map(rule=>[rule.weekday,rule])),bookingsByDate=grouped(bookings),blocksByDate=grouped(blocks);
+  return json({month,days:dates.map(date=>{
+   const {slots,...summary}=dayAvailability({date,rule:byWeekday.get(new Date(date+'T00:00:00Z').getUTCDay()),bookings:bookingsByDate.get(date)||[],blocks:blocksByDate.get(date)||[],settings,now});
+   return summary;
+  })});
  }
  if(method==='GET'&&path==='/api/bookings'){const [from,to]=range();return json({items:(await all(`SELECT * FROM bookings WHERE date BETWEEN ? AND ? ${user.role==='admin'?'':'AND user_id=?'} ORDER BY date,start_min,created_at`,from,to,...(user.role==='admin'?[]:[user.id]))).map(publicBooking)});}
  if(method==='POST'&&path==='/api/bookings'){
