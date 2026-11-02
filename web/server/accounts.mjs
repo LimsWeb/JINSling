@@ -1,5 +1,5 @@
 import { fail, defaults, publicUser, utc, token, hash, uuid, cookie, text, phone, only, username, password, json } from './support.mjs';
-import { createPasswordAuth, passwordAuthReady } from './password-provider.mjs';
+import { createPasswordAuth, passwordAuthReady, bootstrapAuthDiagnostic } from './password-provider.mjs';
 
 export { passwordAuthReady };
 const active = "status IN('pending','approved')";
@@ -7,14 +7,16 @@ const query = db => {
  const stmt=(sql,...args)=>db.prepare(sql).bind(...args);
  return {stmt,first:(sql,...args)=>stmt(sql,...args).first(),run:(sql,...args)=>stmt(sql,...args).run()};
 };
-function providerError(error){
- if(error?.code==='INVALID_CREDENTIALS')fail(401,'unauthorized','아이디와 비밀번호를 확인해 주세요.');
- if(error?.code==='USERNAME_TAKEN')fail(409,'username_taken','이미 사용 중인 아이디입니다.');
- if(error?.code==='NOT_CONFIGURED')fail(503,'auth_not_configured','비밀번호 인증 연결을 설정해 주세요.');
+function providerError(error,setup=false){
+ const detail=setup?bootstrapAuthDiagnostic(error):'',suffix=detail?' '+detail:'';
+ if(error?.code==='INVALID_CREDENTIALS')fail(401,'unauthorized','아이디와 비밀번호를 확인해 주세요.'+suffix);
+ if(error?.code==='USERNAME_TAKEN')fail(409,'username_taken','이미 사용 중인 아이디입니다.'+suffix);
+ if(error?.code==='NOT_CONFIGURED')fail(503,'auth_not_configured','비밀번호 인증 연결을 설정해 주세요.'+suffix);
+ if(detail)fail(503,'auth_unavailable','관리자 등록을 완료하지 못했어요. 진단 코드를 확인해 주세요.'+suffix);
  fail(503,'auth_unavailable','비밀번호 인증을 완료하지 못했습니다. 잠시 후 다시 시도하거나 관리자에게 복구를 요청해 주세요.');
 }
 function provider(env){try{return createPasswordAuth(env);}catch(error){providerError(error);}}
-async function external(auth,method,input){try{return await auth[method](input);}catch(error){providerError(error);}}
+async function external(auth,method,input,setup=false){try{return await auth[method](input);}catch(error){providerError(error,setup);}}
 function principal(result){if(!result||typeof result.uid!=='string'||!result.uid||result.uid.length>128)providerError(null);return result.uid;}
 const resetDigest=async value=>typeof value==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value)?hash(value):null;
 function blocked(user){if(user.password_reset_required||user.credential_lock)fail(403,'password_reset_required','비밀번호 재설정이 필요합니다. 관리자에게 받은 링크 또는 소유자 복구 절차를 사용해 주세요.');}
@@ -74,7 +76,7 @@ export async function accountRoutes({method,path,body,env,db,user,sessionHash,se
   if(await hash(body.setup_token)!==await hash(env.BOOTSTRAP_TOKEN))fail(403,'setup_denied','초기 설정을 확인해 주세요.');
   if(settingsRow)fail(409,'already_configured','이미 초기 설정이 완료되었습니다.');
   const chosenUsername=username(body.username),chosenPassword=password(body.password),name=text(body.name,'이름',80),tel=phone(body.phone),id=uuid(),auth=provider(env);
-  const uid=principal(await external(auth,'createUser',{username:chosenUsername,password:chosenPassword})),secret=token();
+  const uid=principal(await external(auth,'createUser',{username:chosenUsername,password:chosenPassword},true)),secret=token();
   try{
    const statements=[stmt('INSERT INTO settings(id,shop_name,contact_phone,booking_window_days,cancel_before_minutes,pilot_member_limit,member_limit,registration_open,updated_by) VALUES (1,?,?,30,0,100,100,1,?)',defaults.shop_name,'',id),stmt("INSERT INTO users(id,username,provider_uid,name,phone,role,status,key_hash,updated_by) VALUES (?,?,?,?,?,'admin','approved',?,?)",id,chosenUsername,uid,name,tel,await hash(token()),id)];
    for(let weekday=0;weekday<7;weekday++)statements.push(stmt("INSERT INTO weekly_rules(weekday,closed,open_time,close_time,open_min,close_min,daily_limit,updated_by) VALUES (?,?,'09:00',?,540,?,?,?)",weekday,weekday===0?1:0,weekday===6?'14:00':'20:00',weekday===6?840:1200,weekday===6?10:18,id));

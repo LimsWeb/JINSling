@@ -11,14 +11,45 @@ const messages = Object.freeze({
   UNAVAILABLE: 'The password provider is temporarily unavailable.',
   NOT_CONFIGURED: 'The password provider is not configured.',
 });
+const rejectionReasons = Object.freeze({
+  API_KEY_INVALID: 'API_KEY_INVALID', INVALID_API_KEY: 'API_KEY_INVALID',
+  API_KEY_SERVICE_BLOCKED: 'API_KEY_RESTRICTED', API_KEY_HTTP_REFERRER_BLOCKED: 'API_KEY_RESTRICTED',
+  API_KEY_IP_ADDRESS_BLOCKED: 'API_KEY_RESTRICTED', SERVICE_DISABLED: 'API_DISABLED',
+  PROJECT_NOT_FOUND: 'PROJECT_NOT_FOUND', CONFIGURATION_NOT_FOUND: 'CONFIGURATION_NOT_FOUND',
+  OPERATION_NOT_ALLOWED: 'PROVIDER_DISABLED', EMAIL_EXISTS: 'EMAIL_EXISTS', INVALID_EMAIL: 'INVALID_EMAIL',
+  WEAK_PASSWORD: 'PASSWORD_POLICY', PASSWORD_DOES_NOT_MEET_REQUIREMENTS: 'PASSWORD_POLICY',
+  TOO_MANY_ATTEMPTS_TRY_LATER: 'RATE_LIMITED', QUOTA_EXCEEDED: 'RATE_LIMITED',
+  CAPTCHA_CHECK_FAILED: 'CAPTCHA_REQUIRED', MISSING_RECAPTCHA_TOKEN: 'CAPTCHA_REQUIRED',
+  INVALID_RECAPTCHA_TOKEN: 'CAPTCHA_REQUIRED',
+});
+const diagnosticReasons = new Set([...Object.values(rejectionReasons),
+  'ACCESS_DENIED', 'PROVIDER_REJECTED', 'PROVIDER_UNAVAILABLE', 'REQUEST_TIMEOUT', 'TRANSPORT_FAILURE',
+  'INVALID_JSON', 'RESPONSE_SHAPE_INVALID', 'IDENTITY_TOKEN', 'IDENTITY_PROJECT', 'IDENTITY_UID',
+  'IDENTITY_EMAIL', 'IDENTITY_PROVIDER', 'IDENTITY_TIME',
+]);
+function safeDiagnostic(value) {
+  if (!value || !['create', 'verify', 'oauth', 'update', 'delete'].includes(value.operation)
+    || !diagnosticReasons.has(value.reason) || !Number.isInteger(value.status)
+    || !(value.status === 0 || (value.status >= 100 && value.status <= 599))) return undefined;
+  return Object.freeze({ operation: value.operation, reason: value.reason, status: value.status });
+}
 
 export class AuthProviderError extends Error {
-  constructor(code = 'UNAVAILABLE') {
+  constructor(code = 'UNAVAILABLE', diagnostic) {
     const safeCode = Object.hasOwn(messages, code) ? code : 'UNAVAILABLE';
     super(messages[safeCode]);
     this.name = 'AuthProviderError';
     this.code = safeCode;
+    const safe = safeDiagnostic(diagnostic);
+    if (safe) this.diagnostic = safe;
   }
+}
+
+// Call only after the bootstrap token and unconfigured state have been checked.
+// Revalidate at the display boundary; never serialize an exception or Google body.
+export function bootstrapAuthDiagnostic(error) {
+  const detail = error instanceof AuthProviderError ? safeDiagnostic(error.diagnostic) : undefined;
+  return detail?.operation === 'create' ? `[진단: CREATE/${detail.reason}/HTTP${detail.status}]` : '';
 }
 
 function injectedAuth(env) {
@@ -97,9 +128,26 @@ function errorCode(response, data, operation) {
   return 'UNAVAILABLE';
 }
 
+function rejectionReason(response, data) {
+  if (response.status === 429) return 'RATE_LIMITED';
+  if (response.status >= 500) return 'PROVIDER_UNAVAILABLE';
+  const message = typeof data?.error === 'string' ? data.error : data?.error?.message;
+  if (message === 'API key not valid. Please pass a valid API key.') return 'API_KEY_INVALID';
+  const code = typeof message === 'string' ? message.split(/[ :]/, 1)[0] : '';
+  if (Object.hasOwn(rejectionReasons, code)) return rejectionReasons[code];
+  if (Array.isArray(data?.error?.details)) {
+    for (const detail of data.error.details) {
+      if (detail?.['@type'] === 'type.googleapis.com/google.rpc.ErrorInfo'
+        && typeof detail.reason === 'string' && Object.hasOwn(rejectionReasons, detail.reason)) return rejectionReasons[detail.reason];
+    }
+  }
+  return response.status === 401 || response.status === 403 ? 'ACCESS_DENIED' : 'PROVIDER_REJECTED';
+}
+
 async function requestJson(url, body, operation, authorization) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
+  let status = 0;
   try {
     const form = body instanceof URLSearchParams;
     const headers = { 'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json' };
@@ -108,15 +156,18 @@ async function requestJson(url, body, operation, authorization) {
       method: 'POST', headers, body: form ? body.toString() : JSON.stringify(body),
       redirect: 'error', signal: controller.signal,
     });
-    const data = await response.json();
-    if (!response.ok) throw new AuthProviderError(errorCode(response, data, operation));
-    if (!data || typeof data !== 'object' || Array.isArray(data) || data.error) throw new AuthProviderError('UNAVAILABLE');
-    return data;
+    status = response.status;
+    let data;
+    try { data = await response.json(); }
+    catch { throw new AuthProviderError('UNAVAILABLE', { operation, status, reason: controller.signal.aborted ? 'REQUEST_TIMEOUT' : 'INVALID_JSON' }); }
+    if (!response.ok) throw new AuthProviderError(errorCode(response, data, operation), { operation, status, reason: rejectionReason(response, data) });
+    if (!data || typeof data !== 'object' || Array.isArray(data) || data.error) throw new AuthProviderError('UNAVAILABLE', { operation, status, reason: 'RESPONSE_SHAPE_INVALID' });
+    return { data, status };
   } catch (error) {
     if (error instanceof AuthProviderError) throw error;
     // Never propagate a fetch URL, raw Google response, token, or secret via
-    // message/cause/stack. The API receives only the four application codes.
-    throw new AuthProviderError('UNAVAILABLE');
+    // message/cause/stack. Diagnostics contain only fixed enums and HTTP status.
+    throw new AuthProviderError('UNAVAILABLE', { operation, status, reason: controller.signal.aborted ? 'REQUEST_TIMEOUT' : 'TRANSPORT_FAILURE' });
   } finally { clearTimeout(timeout); }
 }
 
@@ -130,9 +181,11 @@ function decodeJson(value) {
   return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
 }
 
-function receivedIdentity(data, expectedEmail, projectId) {
+function receivedIdentity(data, expectedEmail, projectId, operation, status) {
+  let reason = 'IDENTITY_UID';
   try {
     const uid = uidValue(data.localId);
+    reason = 'IDENTITY_TOKEN';
     if (typeof data.idToken !== 'string' || data.idToken.length > 16384) throw new Error();
     const parts = data.idToken.split('.');
     if (parts.length !== 3 || !parts.every(part => /^[A-Za-z0-9_-]+$/.test(part))) throw new Error();
@@ -142,12 +195,19 @@ function receivedIdentity(data, expectedEmail, projectId) {
     // fixed Google HTTPS request. Never call this with a browser-supplied JWT.
     // Google authenticates the password; claims pin that response to our project
     // and requested account without trusting the caller's asserted identity.
-    if (header.alg !== 'RS256' || claims.aud !== projectId || claims.iss !== `https://securetoken.google.com/${projectId}`
-      || claims.sub !== uid || (claims.user_id !== undefined && claims.user_id !== uid)
-      || data.email !== expectedEmail || claims.email !== expectedEmail || claims.firebase?.sign_in_provider !== 'password'
-      || !Number.isFinite(claims.exp) || claims.exp <= now || !Number.isFinite(claims.iat) || claims.iat > now + 300) throw new Error();
+    if (header.alg !== 'RS256' || !claims || typeof claims !== 'object') throw new Error();
+    reason = 'IDENTITY_PROJECT';
+    if (claims.aud !== projectId || claims.iss !== `https://securetoken.google.com/${projectId}`) throw new Error();
+    reason = 'IDENTITY_UID';
+    if (claims.sub !== uid || (claims.user_id !== undefined && claims.user_id !== uid)) throw new Error();
+    reason = 'IDENTITY_EMAIL';
+    if (data.email !== expectedEmail || claims.email !== expectedEmail) throw new Error();
+    reason = 'IDENTITY_PROVIDER';
+    if (claims.firebase?.sign_in_provider !== 'password') throw new Error();
+    reason = 'IDENTITY_TIME';
+    if (!Number.isFinite(claims.exp) || claims.exp <= now || !Number.isFinite(claims.iat) || claims.iat > now + 300) throw new Error();
     return { uid };
-  } catch { throw new AuthProviderError('UNAVAILABLE'); }
+  } catch { throw new AuthProviderError('UNAVAILABLE', { operation, status, reason }); }
 }
 
 function firebaseAuth(config) {
@@ -168,7 +228,7 @@ function firebaseAuth(config) {
     let signature;
     try { signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', signingKey, new TextEncoder().encode(unsigned)); }
     catch { throw new AuthProviderError('NOT_CONFIGURED'); }
-    const data = await requestJson(TOKEN_ENDPOINT, new URLSearchParams({
+    const { data } = await requestJson(TOKEN_ENDPOINT, new URLSearchParams({
       grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: `${unsigned}.${base64url(signature)}`,
     }), 'oauth');
     const duration = Number(data.expires_in);
@@ -186,16 +246,16 @@ function firebaseAuth(config) {
   async function authenticate(operation, username, password) {
     const email = alias(username), checked = passwordValue(password);
     const endpoint = operation === 'create' ? 'signUp' : 'signInWithPassword';
-    const data = await requestJson(`${IDENTITY_ORIGIN}/v1/accounts:${endpoint}?key=${encodeURIComponent(config.apiKey)}`,
+    const { data, status } = await requestJson(`${IDENTITY_ORIGIN}/v1/accounts:${endpoint}?key=${encodeURIComponent(config.apiKey)}`,
       { email, password: checked, returnSecureToken: true }, operation);
-    return receivedIdentity(data, email, config.projectId);
+    return receivedIdentity(data, email, config.projectId, operation, status);
   }
   return Object.freeze({
     createUser({ username, password }) { return authenticate('create', username, password); },
     verifyPassword({ username, password }) { return authenticate('verify', username, password); },
     async setPassword({ uid, password }) {
       const localId = uidValue(uid), checked = passwordValue(password);
-      const data = await requestJson(`${IDENTITY_ORIGIN}/v1/projects/${config.projectId}/accounts:update`,
+      const { data } = await requestJson(`${IDENTITY_ORIGIN}/v1/projects/${config.projectId}/accounts:update`,
         { localId, password: checked }, 'update', await oauthToken());
       if (data.localId !== localId) throw new AuthProviderError('UNAVAILABLE');
     },
