@@ -223,6 +223,7 @@ try{
     await owner.getByRole('button',{name:'링크 복사',exact:true}).click();
     const selected=await owner.locator('#dialog textarea.share-url').evaluate(node=>({value:node.value,start:node.selectionStart,end:node.selectionEnd,focused:document.activeElement===node,readonly:node.readOnly}));
     assert.deepEqual(selected,{value:origin+'/',start:0,end:(origin+'/').length,focused:true,readonly:true});
+    await owner.locator('#dialog .share-print-options summary').click();
     const downloadPromise=owner.waitForEvent('download');await owner.getByRole('button',{name:'이미지 저장 (PNG)',exact:true}).click();
     await(await downloadPromise).saveAs(join(output,'public-qr.png'));
     await owner.setViewportSize({width:390,height:844});

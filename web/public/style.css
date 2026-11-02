@@ -186,6 +186,16 @@ dialog::backdrop{background:#183d355e;backdrop-filter:blur(3px)}
 .share-card-preview{display:block;background:var(--soft);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .share-card-preview canvas{display:block;width:100%;height:auto}
 .share-card-panel .note{margin:0}
+.share-print-options{font-size:.8rem}
+.share-print-options .btn{margin-top:12px}
+.share-page-actions{border-top:1px solid var(--line);padding-top:20px}
+.share-page-actions h3{font-size:1rem;margin:0 0 8px}
+.share-page-actions .actions{margin-top:14px}
+.share-page-url{font-family:monospace;font-size:.8rem;line-height:1.6;margin-top:8px;min-height:76px;overflow-wrap:anywhere}
+.public-share-page{width:100%;max-width:620px;margin:0 auto;padding:32px 20px}
+.share-page-fallback{padding:32px;text-align:center;background:var(--paper);border:1px solid var(--line);border-radius:18px}
+.share-page-fallback h1{font-size:1.8rem}
+.share-page-fallback a{display:inline-block;color:var(--teal);text-decoration:underline;font-weight:700;margin-top:12px}
 .schedule-range{display:flex;gap:10px 24px;flex-wrap:wrap;align-items:center;color:var(--ink);font-size:.85rem}
 .schedule-range span{color:var(--muted);font-size:.78rem}
 .sync-status{color:var(--muted);font-size:.78rem;line-height:1.7;margin:12px 0 24px}

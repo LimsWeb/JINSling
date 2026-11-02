@@ -2,6 +2,7 @@ import {WEEKDAYS,seoulToday,addDays,dateLabel,consumeAuthFragment,listenForAuthF
 import {startVisibleRefresh,sessionAccessKey} from './page-refresh.mjs';
 import {renderShareCard,shareCardBlob} from './share-card.mjs';
 import {copyShareText} from './share-link.mjs';
+import {createInteractiveShareCard} from './share-card-view.mjs';
 
 let {inviteToken,resetToken} = consumeAuthFragment(window.location, window.history);
 const app = document.querySelector('#app');
@@ -116,7 +117,7 @@ function shareLinkControls(url){
   const copy=button('링크 복사',async()=>{
     const wasOpen=manual.open;manual.open=true;
     const result=await copyShareText(url,{selectionInput:input});
-    if(result==='copied'){manual.open=wasOpen;feedback.textContent='링크를 복사했어요. 이미지와 함께 전달해 주세요.';}
+    if(result==='copied'){manual.open=wasOpen;feedback.textContent='링크를 복사했어요. 본인에게 안전하게 전달해 주세요.';}
     else feedback.textContent='주소를 선택했어요. Ctrl+C 또는 길게 눌러 복사해 주세요.';
   },'outline');
   return el('section',{class:'share-link-controls'},
@@ -125,7 +126,8 @@ function shareLinkControls(url){
 }
 function secretDialog(title,secret,{invite=false,expiresAt,onClose,holdSession=false}={}) {
   const description=invite ? '이 초대 링크는 7일 동안 한 번 사용할 수 있어요. 초대할 분에게 직접 전달해 주세요.' : '이 재설정 링크는 24시간 동안 한 번 사용할 수 있어요. 지금 한 번만 표시되므로 본인에게 안전하게 전달해 주세요. 비밀번호는 본인이 직접 정해요.';
-  const content = el('div',{},el('div',{class:'secret-warning'},description),expiresAt?el('p',{class:'note'},`사용 기한 · ${timestamp(expiresAt)} (서울)`):null,shareLinkControls(secret));
+  const content = el('div',{},el('div',{class:'secret-warning'},description),expiresAt?el('p',{class:'note'},`사용 기한 · ${timestamp(expiresAt)} (서울)`):null);
+  if(!invite)content.append(shareLinkControls(secret));
   const feedback=el('p',{class:'muted',role:'status'});
   const save=button('파일로 보관',()=>{
     const blob=new Blob([`${title}\n${secret}\n${expiresAt?`사용 기한: ${timestamp(expiresAt)} (서울)\n`:''}\n${invite?'초대할 분에게만 전달해 주세요.':'해당 회원 본인에게만 전달해 주세요. 24시간 동안 한 번 사용할 수 있어요.'}\n`],{type:'text/plain;charset=utf-8'});
@@ -143,30 +145,48 @@ function downloadBlob(blob,filename){
   setTimeout(()=>URL.revokeObjectURL(url),10_000);
 }
 function shareCardPanel(url,kind,expiresAt){
-  const preview=el('a',{class:'share-card-preview',href:url,target:'_blank',rel:'noopener noreferrer','aria-label':`${kind==='invite'?'초대':'예약'} QR 이미지로 주소 열기 · 새 탭`},loading());
+  const options={url,kind,expiresAt,shopName:state.session.settings.shop_name||'jinSling 예약'};
+  const card=createInteractiveShareCard(options);
   const feedback=el('p',{class:'note',role:'status'});
   let canvas;
   const save=button('이미지 저장 (PNG)',async()=>{
-    if(!canvas||save.disabled)return;
+    if(save.disabled)return;
     save.disabled=true;
-    try{downloadBlob(await shareCardBlob(canvas),kind==='invite'?'jinSling-invite-QR.png':'jinSling-booking-QR.png');feedback.textContent='이미지와 링크를 함께 보내면 받는 분이 편하게 접속할 수 있어요.';}
+    try{
+      canvas ||= await renderShareCard(options);
+      if(!panel.isConnected)return;
+      const blob=await shareCardBlob(canvas);
+      if(!panel.isConnected)return;
+      downloadBlob(blob,kind==='invite'?'jinSling-invite-QR.png':'jinSling-booking-QR.png');
+      feedback.textContent='인쇄용 이미지를 저장했어요. PNG에는 주소 클릭·복사 기능이 포함되지 않아요.';
+    }
     catch{feedback.textContent='이미지를 저장하지 못했어요. 다시 눌러 주세요. 링크 복사는 계속 이용할 수 있어요.';}
     finally{save.disabled=false;}
-  },'',{disabled:true});
-  const panel=el('section',{class:'share-card-panel'},preview,save,feedback);
-  renderShareCard({url,kind,expiresAt,shopName:state.session.settings.shop_name||'jinSling 예약'}).then(result=>{
-    if(!panel.isConnected)return;
-    canvas=result;canvas.setAttribute('role','img');canvas.setAttribute('aria-label',`주소가 위에 있고 QR 코드가 가운데 있는 ${kind==='invite'?'1회용 초대':'공용 예약'} 안내 이미지`);
-    preview.replaceChildren(canvas);save.disabled=false;
-  }).catch(()=>{if(panel.isConnected){preview.replaceChildren(el('p',{class:'inline-error'},'이미지를 만들지 못했어요. 창을 닫고 다시 시도해 주세요.'));}});
+  },'outline');
+  const panel=el('section',{class:'share-card-panel'},card,
+    el('details',{class:'share-print-options'},el('summary',{},'인쇄하거나 사진으로 보내기'),
+      el('p',{class:'note'},kind==='invite'?'사진은 QR로 접속할 수 있어요. 같은 휴대폰에서 바로 열 수 있게 초대 주소도 복사해 함께 보내 주세요.':'사진은 QR로 접속할 수 있어요. 주소 클릭과 복사가 필요하면 안내 카드 링크를 보내 주세요.'),save),feedback);
   return panel;
 }
 function publicShareDialog(){
   const url=`${window.location.origin}/`;
-  openDialog('예약 안내 · QR 이미지',el('div',{},
+  const cardUrl=`${window.location.origin}/share.html`;
+  const cardInput=el('textarea',{class:'share-page-url',readonly:true,rows:2,spellcheck:'false','aria-label':'안내 카드 주소'},cardUrl);
+  const manual=el('details',{class:'share-manual'},el('summary',{},'안내 카드 주소 직접 복사'),cardInput);
+  const feedback=el('p',{class:'note',role:'status'});
+  const copy=button('안내 카드 링크 복사',async()=>{
+    const wasOpen=manual.open;manual.open=true;
+    const result=await copyShareText(cardUrl,{selectionInput:cardInput});
+    if(result==='copied'){manual.open=wasOpen;feedback.textContent='안내 카드 링크를 복사했어요. 이 링크를 보내면 주소와 QR을 함께 볼 수 있어요.';}
+    else feedback.textContent='안내 카드 주소를 선택했어요. Ctrl+C 또는 길게 눌러 복사해 주세요.';
+  });
+  openDialog('예약 안내 · 링크와 QR',el('div',{},
     el('p',{},'여러 손님에게 계속 안내할 수 있는 공용 예약 주소예요. 처음 가입하면 사장님의 승인이 필요해요.'),
-    shareLinkControls(url),shareCardPanel(url,'public'),
-    el('p',{class:'note'},'이 화면의 주소나 QR 이미지를 누르면 새 탭에서 열려요. 저장한 PNG를 보낼 때는 복사한 링크도 함께 보내 주세요.')
+    shareCardPanel(url,'public'),
+    el('div',{class:'share-page-actions'},el('h3',{},'안내 카드 전달하기'),
+      el('p',{class:'note'},'안내 카드 링크를 보내면 위쪽 주소는 클릭·복사하고, 아래쪽 QR은 스캔할 수 있어요.'),
+      el('div',{class:'actions'},copy,el('a',{class:'btn outline',href:cardUrl,target:'_blank',rel:'noopener noreferrer'},'안내 카드 열기')),
+      manual,feedback)
   ));
 }
 function finishAuthentication(result,message){
