@@ -87,6 +87,7 @@ test('bootstrap separates transport, malformed response and rejected identity wi
     const cases = [
       [new TypeError(rawSecret), 'TRANSPORT_FAILURE', 0],
       [new Response(rawSecret, { status: 502 }), 'INVALID_JSON', 502],
+      [new Response(rawSecret, { status: 302, headers: { Location: 'https://attacker.invalid/' } }), 'REDIRECT_REJECTED', 302],
       [json([]), 'RESPONSE_SHAPE_INVALID', 200],
       [json(identity({ idToken: rawSecret })), 'IDENTITY_TOKEN', 200],
       [json(identity({ localId: '' })), 'IDENTITY_UID', 200],

@@ -86,7 +86,7 @@ test('password signup and login use fixed Google HTTPS endpoints and preserve th
   ]);
   for (const { init, body } of requests) {
     assert.equal(init.method, 'POST');
-    assert.equal(init.redirect, 'error', 'credentials must never follow redirects');
+    assert.equal(init.redirect, 'manual', 'use a Workers-supported mode that never forwards credentials on redirects');
     assert.equal(new Headers(init.headers).get('content-type'), 'application/json');
     assert.deepEqual(body, { email: 'member_01@jinsling-auth.invalid', password, returnSecureToken: true });
     assert.ok(init.signal instanceof AbortSignal, 'provider requests must have a deadline');
@@ -138,10 +138,33 @@ test('network exceptions, redirects, and invalid response JSON fail closed witho
   }
 });
 
+test('provider redirects fail before reading the body and never send credentials to the Location target', async t => {
+  const provider = auth();
+  let status = 302, calls = 0;
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    calls++;
+    assert.equal(String(url), 'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=test-api-key');
+    assert.equal(init.redirect, 'manual');
+    return new Response(status === 304 ? null : 'sensitive-provider-body', {
+      status, headers: { Location: 'https://attacker.invalid/sensitive-provider-body' },
+    });
+  });
+  const statuses = [300, 301, 302, 303, 304, 305, 307, 308, 399];
+  for (status of statuses) {
+    await assert.rejects(provider.createUser({ username: 'member_01', password }), error => {
+      hasCode('UNAVAILABLE')(error);
+      assert.deepEqual(error.diagnostic, { operation: 'create', reason: 'REDIRECT_REJECTED', status });
+      return true;
+    });
+  }
+  assert.equal(calls, statuses.length, 'a redirect must not trigger another provider request');
+});
+
 test('privileged password update and deletion use a signed scoped OAuth grant and explicit project and UID', async t => {
   const provider = auth(), requests = [];
   t.mock.method(globalThis, 'fetch', async (url, init) => {
     requests.push({ url: String(url), init });
+    assert.equal(init.redirect, 'manual', 'OAuth and privileged requests must not follow redirects');
     if (String(url) === 'https://oauth2.googleapis.com/token') {
       const body = new URLSearchParams(init.body);
       assert.equal(body.get('grant_type'), 'urn:ietf:params:oauth:grant-type:jwt-bearer');
@@ -157,7 +180,6 @@ test('privileged password update and deletion use a signed scoped OAuth grant an
       return json({ access_token: 'oauth-token-secret', token_type: 'Bearer', expires_in: 3600 });
     }
     assert.equal(new Headers(init.headers).get('authorization'), 'Bearer oauth-token-secret');
-    assert.equal(init.redirect, 'error');
     if (String(url).endsWith('accounts:update')) {
       assert.deepEqual(JSON.parse(init.body), { localId: 'firebase-user-1', password });
       return json({ kind: 'identitytoolkit#SetAccountInfoResponse', localId: 'firebase-user-1' });

@@ -23,7 +23,7 @@ const rejectionReasons = Object.freeze({
   INVALID_RECAPTCHA_TOKEN: 'CAPTCHA_REQUIRED',
 });
 const diagnosticReasons = new Set([...Object.values(rejectionReasons),
-  'ACCESS_DENIED', 'PROVIDER_REJECTED', 'PROVIDER_UNAVAILABLE', 'REQUEST_TIMEOUT', 'TRANSPORT_FAILURE',
+  'ACCESS_DENIED', 'PROVIDER_REJECTED', 'PROVIDER_UNAVAILABLE', 'REQUEST_TIMEOUT', 'TRANSPORT_FAILURE', 'REDIRECT_REJECTED',
   'INVALID_JSON', 'RESPONSE_SHAPE_INVALID', 'IDENTITY_TOKEN', 'IDENTITY_PROJECT', 'IDENTITY_UID',
   'IDENTITY_EMAIL', 'IDENTITY_PROVIDER', 'IDENTITY_TIME',
 ]);
@@ -154,9 +154,12 @@ async function requestJson(url, body, operation, authorization) {
     if (authorization) headers.Authorization = `Bearer ${authorization}`;
     const response = await fetch(url, {
       method: 'POST', headers, body: form ? body.toString() : JSON.stringify(body),
-      redirect: 'error', signal: controller.signal,
+      // Workers supports only follow/manual. Do not forward credentials if the
+      // fixed Google endpoint redirects; reject its response below instead.
+      redirect: 'manual', signal: controller.signal,
     });
     status = response.status;
+    if (status >= 300 && status < 400) throw new AuthProviderError('UNAVAILABLE', { operation, status, reason: 'REDIRECT_REJECTED' });
     let data;
     try { data = await response.json(); }
     catch { throw new AuthProviderError('UNAVAILABLE', { operation, status, reason: controller.signal.aborted ? 'REQUEST_TIMEOUT' : 'INVALID_JSON' }); }
