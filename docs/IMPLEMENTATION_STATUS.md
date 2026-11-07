@@ -1,4 +1,4 @@
-# Implementation status — 2026-11-07, closures, guides and isolated AI lab
+# Implementation status — 2026-11-07, recurring closures
 
 ## Authorized outcome
 
@@ -6,11 +6,13 @@ The current operating agreement is that the developer handles deployment and clo
 
 ## 2026-11-07 update
 
+- Recurring daily, selected-weekday weekly/biweekly, and monthly day/nth-or-last-weekday closures. Mon–Sat 13:00–14:00 lunch preset, optional end date, preview, edit, pause/resume, full release and date exceptions. Additive migration 0003 is automatically installed by the first authorized modifying request; no manual SQL is needed on the existing deployment. Rules are evaluated for requested dates indefinitely, without scheduled jobs or pre-created finite-date rows.
+- Atomic SQL guards check both booking and rule/exception writes, including ongoing bookings, stale versions and idempotent creation retries after deletion. Completely absent schema preserves old behavior; partial installation fails closed for booking/availability and can be repaired by an owner save. Private rule details never appear in member availability.
 - Bulk day, morning, afternoon and custom-time closures, spanning up to 31 inclusive dates. Existing bookings reject the complete batch. Atomic DB writes protect against bookings arriving after preview. Idempotent UUIDs and scoped group release preserve unrelated locks and reservations. No operating DB migration.
 - In-app public owner/member guide with search, role links and print support. Separate owner/member PDF manuals are provided as release artifacts.
 - Independent `ai-lab/` project with its own package, build, Worker, schema and deployment settings. Synthetic owner/member accounts, manual tools and chat-generated confirmation proposals cover reservations, locks and membership status. Production builds exclude it.
 - Default simulation explicitly identifies itself. Optional Workers AI binding uses a fixed Gemma model, strict structured responses, server permissions, confirmation expiry, atomic/idempotent mutations and per-day model budgets. Actual live model quality and account-level Free plan must be verified on the separate lab deployment.
-- Current production suite: 96/96 tests, 40 JavaScript syntax checks, 12 Chromium closure/guide scenarios. AI evidence is recorded separately in VERIFICATION.md. Cloudflare deployment was not performed by this session.
+- Current production suite: 118/118 tests, 46 JavaScript syntax checks, 11 Chromium recurring-closure scenarios plus 12 closure/guide regressions. Five integration checks exercise the compiled Worker and actual local Cloudflare D1/workerd, including upgrading an old database. A two-page owner recurrence PDF supplements the in-app guide. AI evidence is recorded separately in VERIFICATION.md. Cloudflare deployment was not performed by this session.
 
 ## Implemented
 

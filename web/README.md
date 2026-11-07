@@ -3,7 +3,7 @@
 - `public/`: 한국어 브라우저 화면, 외부 의존성 없음.
 - `server/`: Cloudflare 호환 API. 예약·회원·권한은 `env.DB`, 비밀번호 검증은 Firebase Authentication.
 - `functions/api/[[path]].js`: Cloudflare Pages Functions 진입점.
-- `migrations/`: 순서대로 적용하는 D1 스키마와 예약 충돌 검사. 기존 `0001`은 변경하지 않고 계정 전환용 `0002`를 추가.
+- `migrations/`: 순서대로 적용하는 D1 스키마와 예약 충돌 검사. 초기 스키마 `0001`, 계정 전환 `0002`, 반복 잠금용 추가 스키마 `0003`. 반복 잠금은 기존 사이트의 첫 관리자 변경 요청에서 자동 추가 설치도 지원.
 - `dev/password-auth.mjs`: Node 전용 가상 계정 인증기. 운영으로 가져오지 않음.
 - `tests/`: 실제 SQLite를 이용하는 테스트와 개발 어댑터.
 - `scripts/dev.mjs`: 가상 데이터 개발 미리보기. 운영 배포 대상이 아님.

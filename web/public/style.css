@@ -351,3 +351,51 @@ dialog{padding:24px}
 .closure-block-row p{margin:6px 0 0}
 .closure-list>.inline-info>.closure-block-row{padding:0;border:0}
 @media(max-width:620px){.closure-presets{grid-template-columns:repeat(2,minmax(0,1fr))}.closure-date-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}.closure-date-row input{min-width:0;padding:11px 7px;font-size:.82rem}.closure-group{padding:15px}.closure-group .card-head{gap:9px}.closure-group .btn{padding:8px 10px;font-size:.7rem}.closure-block-row{flex-wrap:wrap;gap:8px}.closure-block-row>div{flex:1 1 100%}.closure-preview{padding:16px}.closure-confirmation .btn{white-space:normal;line-height:1.6}.closure-form .dialog-actions{margin-top:0}}
+
+/* Recurring closures stay separate from one-off dates and keep their own saves. */
+.recurring-section{min-width:0}
+.recurring-section>.card-head{flex-wrap:wrap}
+.recurring-quick{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;padding:18px 20px;background:#edf2e8;border:1px solid var(--line);border-radius:12px;margin:20px 0}
+.recurring-quick strong{font-size:.87rem;display:block;margin-bottom:4px}
+.recurring-quick small{font-size:.75rem}
+.recurring-list-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:21px 0 15px}
+.recurring-count{font-size:.77rem;color:var(--muted)}
+.recurring-capacity{margin:0 0 17px}
+.recurring-rule{min-width:0;border:1px solid var(--line);border-radius:12px;padding:21px;background:#fafbf5}
+.recurring-rule-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:13px}
+.recurring-rule-head h3{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;min-width:0;font-size:1rem;line-height:1.6}
+.recurring-rule-head .status{flex-shrink:0}
+.recurring-rule-summary{font-size:.91rem;font-weight:700;margin:0 0 8px}
+.recurring-rule-period{font-size:.76rem;color:var(--muted);line-height:1.8;margin:0}
+.recurring-anchor{margin:8px 0 0;font-size:.72rem}
+.recurring-actions{margin-top:18px}
+.recurring-exceptions{border-top:1px solid var(--line);padding-top:12px;margin-top:17px}
+.recurring-exceptions summary{font-size:.78rem;text-decoration:underline;text-underline-offset:3px;line-height:1.8}
+.recurring-exceptions>.note{margin-top:7px;font-size:.72rem}
+.recurring-exceptions ul{list-style:none;padding:0;margin:8px 0 0}
+.recurring-exceptions li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);font-size:.76rem;line-height:1.7}
+.recurring-exceptions li:last-child{border:0;padding-bottom:0}
+.recurring-exceptions li>.btn{flex-shrink:0}
+.recurring-fields{grid-template-columns:minmax(0,1fr)}
+.recurring-fields label,.recurring-fields input,.recurring-fields select,.recurring-fields textarea{min-width:0}
+.recurring-weekdays{border:0;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;min-width:0}
+.recurring-weekdays legend{font-size:.87rem;font-weight:600;margin-bottom:10px}
+.recurring-weekday{position:relative;display:block;cursor:pointer}
+.recurring-weekday input{position:absolute;opacity:0;width:1px;height:1px;min-height:0;pointer-events:none}
+.recurring-weekday>span{display:grid;place-items:center;min-height:44px;background:var(--paper);border:1px solid #c5d1c7;border-radius:8px;font-size:.8rem}
+.recurring-weekday input:checked+span{background:var(--teal);border-color:var(--teal);color:white}
+.recurring-weekday input:focus-visible+span{outline:3px solid #dc8d5b;outline-offset:3px}
+.recurring-monthly,.recurring-date-fields{display:grid;grid-template-columns:minmax(0,1fr);gap:17px}
+.recurring-end-choice{margin-top:1px}
+.recurring-end-choice input{margin-top:1px}
+.recurring-frequency-hint,.recurring-time-hint{margin:0;font-size:.74rem}
+.recurring-preview h4{font-size:.83rem;margin:18px 0 10px}
+.recurring-occurrences{display:grid;gap:6px;list-style:none;padding:0;margin:0;font-size:.76rem;line-height:1.7}
+.recurring-occurrences li{border-left:2px solid #bdcdb7;padding-left:10px}
+.recurring-form .dialog-actions,.recurring-action .dialog-actions,.recurring-exception-form .dialog-actions{margin-top:0}
+.recurring-form .inline-error+.btn,.recurring-action .inline-error+.btn,.recurring-exception-form .inline-error+.btn{margin-top:12px}
+.recurring-exception-suggestions .note{margin:0 0 9px}
+.recurring-exception-suggestions:empty{display:none}
+.recurring-exception-suggestions .actions{gap:7px}
+.recurring-exception-suggestions .btn{font-size:.72rem;white-space:normal;text-align:left}
+@media(max-width:620px){.recurring-quick{padding:16px}.recurring-rule{padding:16px}.recurring-rule-head{gap:9px}.recurring-rule-head h3{font-size:.9rem}.recurring-rule-summary{font-size:.82rem}.recurring-rule-period{font-size:.71rem}.recurring-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.recurring-actions .btn{white-space:normal}.recurring-exceptions li{align-items:flex-start;flex-wrap:wrap}.recurring-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}.recurring-row select{padding:11px 8px;font-size:.82rem}.recurring-weekdays{gap:5px}.recurring-weekday>span{font-size:.75rem}.recurring-form>.inline-info{font-size:.79rem}.recurring-form .dialog-actions{margin-top:0}.recurring-confirmation .btn{white-space:normal;line-height:1.6}.recurring-date-fields input{max-width:100%;font-size:.85rem}}

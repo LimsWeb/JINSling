@@ -2,6 +2,7 @@ import {ApiError,fail,defaults,publicUser,publicBooking,publicSettings,publicRul
 import {accountSession,accountRoutes,issuePasswordReset,passwordAuthReady} from './accounts.mjs';
 import {calendarMonthDates,dayAvailability} from './availability.mjs';
 import {previewClosures,createClosures,releaseClosures} from './closures.mjs';
+import {assertRecurrenceReady,recurringIntervals,listRecurringBlocks,previewRecurringBlock,createRecurringBlock,updateRecurringBlock,setRecurringEnabled,deleteRecurringBlock,setRecurringException} from './recurring-blocks.mjs';
 
 export async function handleApi(request,env,ctx={}) {
  try{return await route(request,env);}catch(error){try{sqlError(error);}catch(mapped){return errorResponse(mapped);}return errorResponse(error);}
@@ -31,14 +32,14 @@ async function route(request,env){
  const cutoff=b=>{if(user.role!=='admin'&&Date.parse(`${b.date}T${b.start_time}:00+09:00`)-settings.cancel_before_minutes*60000<=Date.now())fail(409,'cutoff','예약 변경 및 취소 가능 시간이 지났습니다.');};
  if(method==='GET'&&path==='/api/availability'){
   const date=validDate(url.searchParams.get('date')),weekday=new Date(date+'T00:00:00Z').getUTCDay(),now=seoulNow();
-  const [rule,bookings,blocks]=await Promise.all([first('SELECT * FROM weekly_rules WHERE weekday=?',weekday),all("SELECT start_min,end_min FROM bookings WHERE date=? AND status='confirmed'",date),all('SELECT start_min,end_min FROM blocks WHERE date=? AND deleted_at IS NULL',date)]);
-  return json(dayAvailability({date,rule,bookings,blocks,settings,now}));
+  const [rule,bookings,blocks,recurring]=await Promise.all([first('SELECT * FROM weekly_rules WHERE weekday=?',weekday),all("SELECT start_min,end_min FROM bookings WHERE date=? AND status='confirmed'",date),all('SELECT start_min,end_min FROM blocks WHERE date=? AND deleted_at IS NULL',date),recurringIntervals(db,date,date)]);
+  return json(dayAvailability({date,rule,bookings,blocks:[...blocks,...recurring],settings,now}));
  }
  if(method==='GET'&&path==='/api/availability/calendar'){
   const month=url.searchParams.get('month'),dates=calendarMonthDates(month),from=dates[0],to=dates.at(-1),now=seoulNow();
-  const [weekly,bookings,blocks]=await Promise.all([rules(),all("SELECT date,start_min,end_min FROM bookings WHERE date BETWEEN ? AND ? AND status='confirmed'",from,to),all('SELECT date,start_min,end_min FROM blocks WHERE date BETWEEN ? AND ? AND deleted_at IS NULL',from,to)]);
+  const [weekly,bookings,blocks,recurring]=await Promise.all([rules(),all("SELECT date,start_min,end_min FROM bookings WHERE date BETWEEN ? AND ? AND status='confirmed'",from,to),all('SELECT date,start_min,end_min FROM blocks WHERE date BETWEEN ? AND ? AND deleted_at IS NULL',from,to),recurringIntervals(db,from,to)]);
   const grouped=rows=>{const map=new Map();for(const row of rows){if(!map.has(row.date))map.set(row.date,[]);map.get(row.date).push(row);}return map;};
-  const byWeekday=new Map(weekly.map(rule=>[rule.weekday,rule])),bookingsByDate=grouped(bookings),blocksByDate=grouped(blocks);
+  const byWeekday=new Map(weekly.map(rule=>[rule.weekday,rule])),bookingsByDate=grouped(bookings),blocksByDate=grouped([...blocks,...recurring]);
   return json({month,days:dates.map(date=>{
    const {slots,...summary}=dayAvailability({date,rule:byWeekday.get(new Date(date+'T00:00:00Z').getUTCDay()),bookings:bookingsByDate.get(date)||[],blocks:blocksByDate.get(date)||[],settings,now});
    return summary;
@@ -53,6 +54,7 @@ async function route(request,env){
   const payload=await hash(JSON.stringify({date,start_time:time(start),memo,customer_name:name,phone:tel,user_id:owner?.id??null}));
   const prior=async()=>requestId?await first('SELECT * FROM bookings WHERE request_actor=? AND request_id=?',user.id,requestId):null;
   let existing=await prior();if(existing){if(existing.request_payload!==payload)fail(409,'idempotency_conflict','같은 요청 번호의 내용이 다릅니다.');return json({booking:publicBooking(existing)});}
+  await assertRecurrenceReady(db);
   const id=uuid();try{await run("INSERT INTO bookings(id,user_id,customer_name,phone,date,start_min,end_min,start_time,end_time,memo,status,version,updated_by,request_id,request_actor,request_payload) VALUES (?,?,?,?,?,?,?,?,?,?,'confirmed',1,?,?,?,?)",id,owner?.id??null,name,tel,date,start,start+30,time(start),time(start+30),memo,user.id,requestId,user.id,payload);}catch(error){existing=await prior();if(!existing||existing.request_payload!==payload)throw error;return json({booking:publicBooking(existing)});}
   return json({booking:publicBooking(await first('SELECT * FROM bookings WHERE id=?',id))});
  }
@@ -63,6 +65,7 @@ async function route(request,env){
   else{
    only(body,['version','date','start_time','memo','customer_name','phone']);if(user.role!=='admin'&&Object.keys(body).some(k=>!['version','memo'].includes(k)))fail(403,'forbidden','메모만 수정할 수 있습니다.');
    const date=body.date===undefined?b.date:validDate(body.date),start=body.start_time===undefined?b.start_min:minute(body.start_time),memo=body.memo===undefined?b.memo:text(body.memo,'메모',1000,{empty:true}),name=body.customer_name===undefined?b.customer_name:text(body.customer_name,'이름',80),tel=body.phone===undefined?b.phone:phone(body.phone);
+   if(date!==b.date||start!==b.start_min)await assertRecurrenceReady(db);
    const result=await run("UPDATE bookings SET date=?,start_min=?,end_min=?,start_time=?,end_time=?,memo=?,customer_name=?,phone=?,version=version+1,updated_at=datetime('now'),updated_by=? WHERE id=? AND version=?",date,start,start+30,time(start),time(start+30),memo,name,tel,user.id,b.id,v);if(!result.meta.changes)fail(409,'stale_version','예약이 변경되었습니다.');
   }
   return json({booking:publicBooking(await first('SELECT * FROM bookings WHERE id=?',b.id))});
@@ -79,6 +82,15 @@ async function route(request,env){
  if(method==='POST'&&path==='/api/admin/invites'){only(body,[]);const id=uuid(),secret=token();await run("INSERT INTO invites(id,token_hash,expires_at,created_by) VALUES (?,?,datetime('now','+7 days'),?)",id,await hash(secret),user.id);return json({id,invite_token:secret,expires_at:utc((await first('SELECT expires_at FROM invites WHERE id=?',id)).expires_at)});}
  routeMatch=/^\/api\/admin\/invites\/([^/]+)$/.exec(path);
  if(method==='DELETE'&&routeMatch){only(body,[]);const result=await run("UPDATE invites SET revoked_at=datetime('now'),revoked_by=? WHERE id=? AND revoked_at IS NULL",user.id,routeMatch[1]);if(!result.meta.changes)fail(404,'not_found','초대를 찾을 수 없습니다.');return json({});}
+ if(method==='GET'&&path==='/api/admin/recurring-blocks')return json(await listRecurringBlocks(db));
+ if(method==='POST'&&path==='/api/admin/recurring-blocks/preview')return json(await previewRecurringBlock(db,body));
+ if(method==='POST'&&path==='/api/admin/recurring-blocks')return json(await createRecurringBlock(db,body,user.id));
+ routeMatch=/^\/api\/admin\/recurring-blocks\/([^/]+)\/exceptions\/([^/]+)$/.exec(path);
+ if(routeMatch&&(method==='PUT'||method==='DELETE'))return json(await setRecurringException(db,routeMatch[1],routeMatch[2],body,user.id,method==='PUT'));
+ routeMatch=/^\/api\/admin\/recurring-blocks\/([^/]+)$/.exec(path);
+ if(method==='PUT'&&routeMatch)return json(await updateRecurringBlock(db,routeMatch[1],body,user.id));
+ if(method==='PATCH'&&routeMatch)return json(await setRecurringEnabled(db,routeMatch[1],body,user.id));
+ if(method==='DELETE'&&routeMatch)return json(await deleteRecurringBlock(db,routeMatch[1],body,user.id));
  if(method==='GET'&&path==='/api/admin/settings')return json({settings,weekly_rules:(await rules()).map(publicRule)});
  if(method==='PUT'&&path==='/api/admin/settings'){
   only(body,['settings','weekly_rules']);if(!body.settings||typeof body.settings!=='object'||Array.isArray(body.settings))fail(400,'invalid_input','설정을 확인해 주세요.');only(body.settings,Object.keys(defaults));const s=body.settings;

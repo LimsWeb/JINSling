@@ -262,7 +262,7 @@ try{
   assert.equal(await guide.locator('#member .guide-topic:visible').count(),6);await assertNoOverflow(guide,'390px member guide');await capture(guide,'05-member-guide-mobile-390');
   await guide.getByRole('link',{name:'사장님 안내',exact:true}).click();
   assert.equal(await guide.locator('#owner').isVisible(),true);assert.equal(await guide.locator('#member').isVisible(),false);
-  assert.equal(await guide.locator('#owner .guide-topic:visible').count(),9);
+  assert.equal(await guide.locator('#owner .guide-topic:visible').count(),11);
   await guide.locator('#guide-search').fill('휴무 잠금');
   assert.ok(await guide.locator('#owner .guide-topic:visible').count()>0);
   assert.equal(await guide.locator('#owner-closures').isVisible(),true);assert.match(await guide.locator('#guide-results').innerText(),/찾았어요/);
@@ -270,7 +270,7 @@ try{
   await guide.locator('#guide-search').fill('없는검색어123');assert.equal(await guide.locator('#guide-empty').isVisible(),true);
   await guide.locator('#guide-search').fill('QR');assert.equal(await guide.locator('#owner-share').isVisible(),true);
   await guide.emulateMedia({media:'print'});
-  assert.equal(await guide.locator('#owner .guide-topic:visible').count(),9,'Print includes the whole selected guide even during search.');
+  assert.equal(await guide.locator('#owner .guide-topic:visible').count(),11,'Print includes the whole selected guide even during search.');
   assert.equal(await guide.locator('#member').isVisible(),false);await guide.emulateMedia({media:'screen'});
   await guide.locator('#guide-search').fill('');await guide.setViewportSize({width:1440,height:1000});await capture(guide,'07-owner-guide-desktop');
   assert.deepEqual(guideApi,[]);assert.doesNotMatch(await guide.locator('body').innerText(),new RegExp(ownerAccount.username));

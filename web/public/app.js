@@ -4,6 +4,7 @@ import {renderShareCard,shareCardBlob} from './share-card.mjs';
 import {copyShareText} from './share-link.mjs';
 import {createInteractiveShareCard} from './share-card-view.mjs';
 import {groupClosureBlocks,showClosureDialog} from './closure-controls.mjs';
+import {createRecurringSection} from './recurring-controls.mjs';
 
 let {inviteToken,resetToken} = consumeAuthFragment(window.location, window.history);
 const app = document.querySelector('#app');
@@ -624,7 +625,9 @@ async function renderSettings(container,version){
     const details=el('details',{class:'closure-group-details'},el('summary',{},`날짜별 잠금 ${group.items.length}개 보기 · 개별 해제`),el('div',{class:'stack'},group.items.map(row)));
     blockList.append(el('section',{class:'closure-group'},el('div',{class:'card-head'},el('div',{},el('span',{class:'closure-group-label'},`등록 묶음 · 표시된 잠금 ${group.items.length}개`),el('h3',{},period)),button('묶음 해제',()=>releaseBlockGroup(group),'outline small')),el('p',{class:'muted'},`매일 ${first.start_time}–${first.end_time}`),first.note?el('p',{class:'closure-note'},first.note):null,details));
   }
-  blockCard.append(blockList);content.replaceChildren(settingsForm,blockCard);
+  const access=sessionAccessKey(state.session);
+  const recurringCard=createRecurringSection({api,el,field,button,dialog,openDialog,isContextCurrent:()=>version===renderVersion&&access===sessionAccessKey(state.session),onChanged:message=>notify(message)});
+  blockCard.append(blockList);content.replaceChildren(settingsForm,recurringCard,blockCard);
 }
 function addBlock(){
   const version=renderVersion,access=sessionAccessKey(state.session);
@@ -736,7 +739,7 @@ async function renderAudit(container,version){
   audit.lastChild.remove();
   if(!data.items.length)audit.append(empty('아직 변경 기록이 없어요.'));
   for(const item of data.items){
-    const entityLabels={booking:'예약',user:'회원',settings:'운영 설정',block:'시간 차단',invite:'초대',weekly_rule:'영업시간'};
+    const entityLabels={booking:'예약',user:'회원',settings:'운영 설정',block:'시간 차단',recurring_block:'반복 잠금',recurring_exception:'반복 잠금 날짜 예외',invite:'초대',weekly_rule:'영업시간'};
     const details=el('details',{},el('summary',{},'변경 내용 보기'),el('pre',{},JSON.stringify({이전:parseAudit(item.before_data),이후:parseAudit(item.after_data)},null,2)));
     audit.append(el('article',{class:'audit-entry'},el('strong',{},`${entityLabels[item.entity_type]||item.entity_type} · ${actionLabels[item.action]||item.action}`),el('p',{},`${item.actor_name||'시스템'} · ${timestamp(item.created_at)}`),details));
   }

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#174d46">
   <meta name="color-scheme" content="light">
   <meta name="referrer" content="no-referrer">
-  <meta name="description" content="jinSling 회원과 사장님을 위한 가입, 예약, 휴무 잠금, QR 안내 및 자료 내보내기 이용 가이드.">
+  <meta name="description" content="jinSling 회원과 사장님을 위한 가입, 예약, 휴무·반복 잠금, QR 안내 및 자료 내보내기 이용 가이드.">
   <title>이용 가이드 · jinSling</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/guide.css">
@@ -32,7 +32,7 @@
           <a id="guide-tab-owner" href="#owner" data-guide-view="owner">사장님 안내</a>
         </nav>
         <div class="guide-search-row">
-          <label for="guide-search"><span>안내에서 찾기</span><input id="guide-search" type="search" placeholder="예: 승인, 취소, 휴무, QR" autocomplete="off" aria-describedby="guide-results" disabled></label>
+          <label for="guide-search"><span>안내에서 찾기</span><input id="guide-search" type="search" placeholder="예: 승인, 점심시간, 반복, QR" autocomplete="off" aria-describedby="guide-results" disabled></label>
           <button type="button" class="btn outline" id="guide-print" hidden>이 안내 인쇄</button>
         </div>
         <p id="guide-results" class="note" role="status">회원 안내와 사장님 안내를 모두 읽을 수 있어요.</p>
@@ -53,7 +53,7 @@
               <span class="guide-step">02 · 시간 고르기</span><h3>원하는 시간으로 예약해요</h3>
               <ol><li><strong>예약하기</strong>에서 날짜를 골라요. 매장에서 정한 예약 공개 기간 안의 날짜를 선택할 수 있어요.</li><li><strong>예약 가능</strong>으로 표시된 시간 중 하나를 선택해요. 한 예약은 <strong>30분</strong>이에요.</li><li>필요하면 전달할 메모를 적고 <strong>예약 내용 확인</strong>을 눌러요.</li><li>날짜와 시간을 확인한 후 <strong>예약 확정하기</strong>를 눌러요. <strong>내 예약</strong>에 확정 내역이 나타나는지 확인해 주세요.</li></ol>
               <p>예약 확정 내역은 <strong>내 예약</strong>에서 확인해요. 문자·카카오 알림은 자동으로 보내지 않아요. 같은 시간은 한 분만 예약할 수 있어요. 화면에서 골랐더라도 확정하기 전에 다른 분이 예약하면 저장되지 않아요. 안내를 확인하고 다른 시간을 선택해 주세요.</p>
-              <p class="guide-tip">휴무, 운영자 차단, 이미 예약된 시간, 지난 시간, 하루 예약 한도에 도달한 시간은 선택할 수 없어요. 시간표는 서울 시간 기준이에요.</p>
+              <p class="guide-tip">휴무, 운영자 차단, 점심시간 같은 반복 잠금, 이미 예약된 시간, 지난 시간, 하루 예약 한도에 도달한 시간은 선택할 수 없어요. 반복 잠금도 모든 회원의 예약 가능 시간에 함께 반영돼요. 시간표는 서울 시간 기준이에요.</p>
             </article>
             <article class="guide-topic" id="member-change" data-keywords="내 예약 조회 취소 변경 메모 마감 분 수정 일정">
               <span class="guide-step">03 · 예약 관리</span><h3>내 예약을 확인하고 변경해요</h3>
@@ -110,26 +110,40 @@
               <ul><li><strong>묶음 해제</strong>는 그 묶음에 남아 있는 잠금을 모두 해제해요.</li><li><strong>날짜별 잠금 보기 · 개별 해제 → 이 날짜 해제</strong>는 해당 날짜의 잠금 하나만 해제해요.</li><li>기존에 따로 등록한 단일 잠금도 <strong>이 날짜 해제</strong>로 풀 수 있어요.</li></ul>
               <p class="guide-tip">같은 날짜·시간에 두 묶음이 겹쳐 있다면 하나를 풀어도 다른 묶음은 남아요. 요일 휴무, 영업시간, 하루 한도, 기존 예약도 계속 적용되므로 <strong>잠금 해제가 예약 가능을 보장하지는 않아요.</strong> 해제 후 예약하기 화면에서 확인해 주세요.</p>
             </article>
+            <article class="guide-topic" id="owner-recurring" data-keywords="반복 루틴 점심시간 매일 매주 월요일 토요일 격주 2주 매달 월별 정기 휴무 13 14 미리보기 종료일">
+              <span class="guide-step">06 · 반복하는 쉬는 시간</span><h3>점심시간과 정기 휴무를 반복해요</h3>
+              <ol><li><strong>운영 설정 → 반복 잠금</strong>을 열어요. <strong>점심시간 설정</strong>을 누르면 <strong>매주 월~토 13:00–14:00</strong>이 미리 선택돼요. 다른 일정은 <strong>＋ 반복 잠금</strong>으로 시작해요.</li><li>반복 방식, 시작일, 잠글 시간을 정해요. 끝나는 날이 있다면 <strong>종료일 정하기</strong>를 선택해요. 선택하지 않으면 계속 반복돼요.</li><li><strong>반복 일정 미리보기</strong>에서 다음 적용 날짜와 겹치는 예약을 확인해요.</li><li><strong>확인한 반복 잠금 저장</strong>을 눌러요. 저장한 규칙은 모든 회원의 예약 가능 시간에 적용돼요.</li></ol>
+              <div class="guide-table-wrap"><table><caption>반복 방식 고르기</caption><thead><tr><th scope="col">방식</th><th scope="col">예시와 적용 기준</th></tr></thead><tbody><tr><th scope="row">매일</th><td>매일 13:00–14:00처럼 같은 시간을 잠가요.</td></tr><tr><th scope="row">매주</th><td>월~토 등 원하는 요일을 여러 개 선택해요.</td></tr><tr><th scope="row">격주</th><td>시작일이 속한 월요일 시작 주부터 한 주 걸러, 선택한 요일에 적용해요. 시작일 전에는 잠기지 않아요.</td></tr><tr><th scope="row">매달 · 날짜</th><td>매달 10일처럼 날짜를 정해요. 29~31일이 없는 달은 건너뛰어요.</td></tr><tr><th scope="row">매달 · 요일</th><td>매달 둘째 월요일이나 마지막 토요일처럼 정해요. 다섯째 요일이 없는 달은 건너뛰어요.</td></tr></tbody></table></div>
+              <p>시간은 30분 단위로 선택해요. 하루 전체는 <strong>00:00–24:00</strong>으로 설정해요. 자정을 넘는 시간은 두 규칙으로 나눠 주세요. 잠금 메모는 회원에게 보이지 않아요.</p>
+              <p class="guide-tip">기존 확정 예약과 겹치면 저장할 수 없어요. 예약은 자동 취소되지 않아요. 미리보기 후 내용을 바꾸면 다시 확인해야 하며, 저장할 때도 예약 겹침을 다시 검사해요. 미리보기에 보이는 날짜는 일부이며, 반복은 정한 종료일까지 계속돼요.</p>
+            </article>
+            <article class="guide-topic" id="owner-recurring-exceptions" data-keywords="반복 잠금 수정 일시중지 재개 전체해제 하루 예외 복원 다시잠그기 365 32">
+              <span class="guide-step">07 · 반복 잠금 조정</span><h3>반복을 쉬거나 하루만 열어요</h3>
+              <p><strong>운영 설정 → 반복 잠금</strong>에서 바꿀 규칙을 찾아요.</p>
+              <ul><li><strong>수정</strong>: 시간·요일·기간을 바꾼 뒤 미리보고 저장해요. 일시중지 상태에서 수정하면 중지 상태를 유지해요.</li><li><strong>일시중지 / 재개</strong>: 설정과 예외 날짜를 보관하면서 적용을 잠시 쉬거나 다시 시작해요. 재개할 때 기존 예약과 겹치면 적용되지 않아요.</li><li><strong>하루만 열기 → 열어 둘 날짜 → 이 날짜만 열기</strong>: 이 규칙이 적용되는 날짜 한 번만 예외로 열어요. 다른 날짜의 반복은 유지돼요. 오늘부터 365일 후까지 선택할 수 있어요.</li><li><strong>예외로 연 날짜 → 다시 잠그기</strong>: 해당 날짜의 예외를 없애요. 적용 중인 규칙은 그동안 예약이 들어왔다면 잠금을 복원할 수 없어요. 중지한 규칙은 재개할 때 다시 확인해요.</li><li><strong>전체 해제</strong>: 이 반복 규칙을 끝내요. 다시 필요하면 새 규칙으로 등록해요.</li></ul>
+              <p>반복 규칙은 일시중지한 규칙을 포함해 최대 <strong>32개</strong>까지 등록할 수 있어요. 사용하지 않는 규칙은 전체 해제해 정리해 주세요.</p>
+              <p class="guide-tip">하루 예외나 전체 해제는 선택한 규칙에만 적용돼요. 다른 반복 잠금, 날짜별 잠금, 요일 휴무, 영업시간과 예약 한도는 유지돼요. 변경한 뒤 예약하기 화면에서 실제 가능한 시간을 확인해 주세요.</p>
+            </article>
             <article class="guide-topic" id="owner-settings" data-keywords="운영 설정 영업시간 요일 하루 한도 취소 마감 공개기간 연락처 30분">
-              <span class="guide-step">06 · 운영 기준</span><h3>영업시간과 예약 한도를 정해요</h3>
+              <span class="guide-step">08 · 운영 기준</span><h3>영업시간과 예약 한도를 정해요</h3>
               <p><strong>운영 설정</strong>에서 매장 이름, 공개 문의 연락처, 예약 공개 기간, 고객 취소 마감, 등록 계정 한도와 신규 가입 여부를 설정해요. 아래에서 요일별 휴무, 시작·종료 시간, 하루 예약 한도를 정하고 <strong>운영 설정 저장</strong>을 눌러요.</p>
               <p>한 예약은 30분이에요. 빈 시간이 있어도 하루 한도에 도달하면 더 받지 않아요. 이미 확정된 예약과 충돌하는 영업시간·휴무·한도 변경은 저장할 수 없어요.</p>
               <p class="guide-tip">공개 문의 연락처는 회원 화면에 표시돼요. 관리자 개인 연락처와 별개이므로 손님에게 안내할 번호만 입력해 주세요. 비워 둘 수도 있어요.</p>
             </article>
             <article class="guide-topic" id="owner-share" data-keywords="QR 큐알 공유 링크 웹 안내카드 PNG 이미지 인쇄 스캔 초대 7일">
-              <span class="guide-step">07 · 예약 안내 보내기</span><h3>웹 안내 카드와 QR을 나눠 써요</h3>
+              <span class="guide-step">09 · 예약 안내 보내기</span><h3>웹 안내 카드와 QR을 나눠 써요</h3>
               <p><strong>회원 관리 → 예약 안내 · QR</strong>을 열어요. 여러 손님에게 계속 안내할 때는 이 공용 예약 주소를 사용해요.</p>
               <ul><li><strong>안내 카드 링크 복사</strong>: 주소와 QR을 함께 볼 수 있는 웹 안내 카드를 전달해요. 웹에서는 예약 주소를 열고 복사할 수 있어요.</li><li><strong>이미지 저장 (PNG)</strong>: 안내 카드를 이미지로 저장해 인쇄하거나 보여줘요. PNG 안의 글자는 클릭·복사 버튼이 아니에요. 메시지로 보낼 때는 클릭할 예약 링크도 함께 전달해 주세요.</li><li><strong>＋ 1회용 초대</strong>: 한 사람에게 보낼 초대 링크예요. 7일 동안 한 번만 사용할 수 있고, 사용 전에는 철회할 수 있어요. 여러 사람에게 같은 초대를 돌리지 마세요.</li></ul>
               <p class="guide-tip">공용 안내와 1회용 초대 모두 가입 후 첫 승인이 필요해요. QR을 인쇄한 뒤 휴대폰으로 실제 주소가 잘 열리는지 확인해 주세요.</p>
             </article>
             <article class="guide-topic" id="owner-password" data-keywords="비밀번호 재설정 분실 지원 본인확인 24시간 링크 로그인 관리자">
-              <span class="guide-step">08 · 회원 계정 지원</span><h3>비밀번호 재설정을 도와줘요</h3>
+              <span class="guide-step">10 · 회원 계정 지원</span><h3>비밀번호 재설정을 도와줘요</h3>
               <ol><li><strong>회원 관리</strong>에서 요청한 회원의 이름·아이디·연락처를 확인해요.</li><li><strong>비밀번호 재설정</strong>을 누르고 확인해요.</li><li>한 번 표시되는 재설정 링크를 해당 회원 본인에게 안전하게 전달해요. 회원이 링크에서 새 비밀번호를 직접 정해요.</li></ol>
               <p>재설정 링크는 24시간 동안 한 번 사용할 수 있어요. 비밀번호를 대신 정하거나 기존 비밀번호를 조회하는 기능은 없어요. 사장님 본인 계정의 비밀번호도 메뉴의 <strong>비밀번호 변경</strong>에서 바꿀 수 있어요.</p>
               <p class="guide-tip">사장님이 로그인할 수 없고 재설정 링크도 없다면 유지보수 담당자에게 계정 복구를 요청해 주세요. 비밀번호·재설정 링크를 공용 채팅이나 안내 가이드에 올리지 마세요.</p>
             </article>
             <article class="guide-topic" id="owner-records" data-keywords="CSV 다운로드 내보내기 기록 백업 복구 회원 예약 엑셀 시트 개인정보">
-              <span class="guide-step">09 · 기록 보관</span><h3>CSV로 확인하고 백업은 따로 관리해요</h3>
+              <span class="guide-step">11 · 기록 보관</span><h3>CSV로 확인하고 백업은 따로 관리해요</h3>
               <ul><li><strong>회원 관리 → 회원 CSV 다운로드</strong>: 회원 목록을 받아요.</li><li><strong>기록 · 내보내기 → 예약 CSV 다운로드</strong>: 시작일과 종료일을 정해 해당 기간의 예약 자료를 받아요.</li><li><strong>기록 · 내보내기 → 최근 변경 기록</strong>: 최근 100건을 확인하고 <strong>변경 내용 보기</strong>를 펼쳐요.</li></ul>
               <p>CSV에는 이름·연락처 등 개인정보가 포함돼요. 업무에 필요한 담당자만 접근할 수 있는 곳에 보관해 주세요. 비밀번호나 재설정 링크는 CSV로 내려받을 수 없어요.</p>
               <p class="guide-tip">CSV는 내려받은 시점의 자료예요. 시트에서 수정해도 앱에 자동 반영되지 않고, 전체 서비스 복구용 백업을 대신하지 않아요. 운영 데이터 백업과 복구는 유지보수 담당자에게 요청하고, 복구 전에 대상 시점과 범위를 함께 확인해 주세요.</p>
