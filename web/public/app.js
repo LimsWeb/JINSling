@@ -3,6 +3,7 @@ import {startVisibleRefresh,sessionAccessKey} from './page-refresh.mjs';
 import {renderShareCard,shareCardBlob} from './share-card.mjs';
 import {copyShareText} from './share-link.mjs';
 import {createInteractiveShareCard} from './share-card-view.mjs';
+import {groupClosureBlocks,showClosureDialog} from './closure-controls.mjs';
 
 let {inviteToken,resetToken} = consumeAuthFragment(window.location, window.history);
 const app = document.querySelector('#app');
@@ -190,6 +191,10 @@ function publicShareDialog(){
   ));
 }
 function finishAuthentication(result,message){
+  // A new login must not retain a previous account's open dialog.
+  dialog.onclose=null;
+  if(dialog.open)dialog.close();
+  dialog.replaceChildren();
   state.slot=null;state.availability=null;state.availabilityReady=false;state.reserveMemo='';
   state.session={...state.session,configured:true,user:result.user};
   inviteToken=null;resetToken=null;
@@ -308,12 +313,13 @@ function renderAuth(mode){
       const result=await api('/auth/login',{method:'POST',body:{username:normalizeUsername(values.username),password:values.password}});finishAuthentication(result);
     }),el('p',{class:'auth-footer'},state.session.settings.registration_open===false?'현재 신규 가입은 잠시 쉬고 있어요.':el('span',{},'처음 방문하셨나요? ',button('회원 가입',()=>renderAuth('join'),'link-button')),el('br'),'비밀번호를 잊었다면 사장님에게 문의해 주세요.'),el('div',{class:'auth-secondary'},button('예전 접속키로 시작',()=>renderAuth('legacy'),'link-button')));
   }
+  card.append(el('p',{class:'auth-guide'},el('a',{href:'/guide.html#member',target:'_blank',rel:'noopener noreferrer','aria-label':'회원 · 사장님 이용 가이드, 새 탭에서 열기'},'처음이라면, 이용 가이드 보기 ↗')));
   app.replaceChildren(el('main',{class:'auth-shell'},intro,card));
 }
 function renderPending(){
   const user=state.session.user;
   const title=user.status==='pending'?'승인을 기다리고 있어요':'현재 예약을 이용할 수 없어요';
-  app.replaceChildren(el('main',{class:'workspace'},brand(),el('section',{class:'card pending-card'},el('span',{class:'brand-mark','aria-hidden':'true'},'j.'),badge(user.status),el('h1',{class:'section-space'},title),el('p',{},`${user.name}님, ${user.status==='pending'?'사장님의 가입 승인을 기다려 주세요. 승인은 처음 한 번만 필요해요.':'자세한 내용은 사장님에게 문의해 주세요.'}`),el('p',{class:'muted'},`아이디 · ${user.username}`),el('p',{class:'muted'},contactNote()),el('div',{class:'actions'},button('승인 상태 확인',refreshSession),button('비밀번호 변경',changePassword,'outline'),button('로그아웃',logout,'outline')))));
+  app.replaceChildren(el('main',{class:'workspace'},brand(),el('section',{class:'card pending-card'},el('span',{class:'brand-mark','aria-hidden':'true'},'j.'),badge(user.status),el('h1',{class:'section-space'},title),el('p',{},`${user.name}님, ${user.status==='pending'?'사장님의 가입 승인을 기다려 주세요. 승인은 처음 한 번만 필요해요.':'자세한 내용은 사장님에게 문의해 주세요.'}`),el('p',{class:'muted'},`아이디 · ${user.username}`),el('p',{class:'muted'},contactNote()),el('div',{class:'actions'},button('승인 상태 확인',refreshSession),button('비밀번호 변경',changePassword,'outline'),button('로그아웃',logout,'outline')),el('p',{class:'auth-guide'},el('a',{href:'/guide.html#member',target:'_blank',rel:'noopener noreferrer'},'이용 가이드 보기 ↗')))));
 }
 async function logout(){try{await api('/auth/logout',{method:'POST'});state.session.user=null;state.slot=null;state.availability=null;state.availabilityReady=false;state.reserveMemo='';inviteToken=null;resetToken=null;renderAuth('login');}catch(error){notify(error.message,true);}}
 function changePassword(){
@@ -328,6 +334,7 @@ function renderShell(){
   const links=admin ? [['schedule','◷','예약 일정'],['reserve','＋','예약하기'],['mine','▤','내 계정 예약'],['settings','☷','운영 설정'],['users','♧','회원 관리'],['audit','↗','기록 · 내보내기']] : [['reserve','＋','예약하기'],['mine','▤','내 예약']];
   if(!links.some(([key])=>key===state.page))state.page=admin?'schedule':'reserve';
   const nav=el('nav',{class:'navigation','aria-label':'주 메뉴'},links.map(([key,icon,label])=>el('button',{type:'button',class:`nav-button${state.page===key?' active':''}`,'aria-current':state.page===key?'page':null,onclick:()=>{state.page=key;if(key==='reserve')state.calendarMonth=state.date.slice(0,7);render();}},el('span',{class:'nav-icon','aria-hidden':'true'},icon),label)));
+  nav.append(el('a',{class:'nav-button guide-nav-link',href:`/guide.html#${admin?'owner':'member'}`,target:'_blank',rel:'noopener noreferrer','aria-label':'이용 가이드, 새 탭에서 열기'},el('span',{class:'nav-icon','aria-hidden':'true'},'?'),'이용 가이드',el('span',{class:'guide-external','aria-hidden':'true'},'↗')));
   const user=state.session.user;
   const sidebar=el('aside',{class:'sidebar'},brand(),nav,el('div',{class:'sidebar-bottom'},el('div',{class:'profile'},el('span',{class:'avatar','aria-hidden':'true'},user.name.slice(0,1)),el('div',{},el('strong',{},`${user.name}님`),el('small',{},admin?'매장 관리자':'jinSling 멤버'))),el('div',{class:'profile-actions'},el('button',{type:'button',class:'logout',onclick:changePassword},'비밀번호 변경'),el('button',{type:'button',class:'logout',onclick:logout},'로그아웃'))));
   const main=el('main',{class:'workspace',id:'main-content'});
@@ -606,16 +613,40 @@ async function renderSettings(container,version){
     const updated={shop_name:values.shop_name,contact_phone:values.contact_phone,booking_window_days:Number(values.booking_window_days),cancel_before_minutes:Number(values.cancel_before_minutes),member_limit:Number(values.member_limit),registration_open:values.registration_open==='on'};
     const result=await api('/admin/settings',{method:'PUT',body:{settings:updated,weekly_rules}});state.session.settings=result.settings;notify('운영 설정을 저장했어요.');render();
   });
-  const blockCard=el('section',{class:'card'},el('div',{class:'card-head'},el('h2',{},'휴무 · 시간 차단'),button('＋ 시간 차단',addBlock,'secondary small')),el('p',{class:'muted'},'특정 날짜의 점심시간이나 개인 일정을 비워 둘 수 있어요. 앞으로 1년 이내의 차단을 표시해요.'));
-  const blockList=el('div',{class:'stack'});
-  if(!blocks.items.length)blockList.append(empty('등록된 시간 차단이 없어요.'));
-  for(const block of blocks.items){
-    blockList.append(el('div',{class:'inline-info'},el('div',{class:'card-head'},el('strong',{},`${dateLabel(block.date)} · ${block.start_time}–${block.end_time}`),button('해제',()=>confirmation('시간 차단 해제',`${dateLabel(block.date)} ${block.start_time}–${block.end_time} 차단을 해제할까요?`,'해제하기',async()=>{await api(`/admin/blocks/${encodeURIComponent(block.id)}`,{method:'DELETE'});render();notify('시간 차단을 해제했어요.');}),'outline small')),block.note?el('p',{class:'muted'},block.note):null));
+  const blockCard=el('section',{class:'card'},el('div',{class:'card-head'},el('h2',{},'휴무 · 시간 잠금'),button('＋ 휴무 잠금',addBlock,'secondary small')),el('p',{class:'muted'},'하루 · 오전 · 오후 또는 원하는 시간을 날짜별로 잠가요. 오늘부터 365일 후까지 등록된 잠금을 표시해요.'),el('p',{class:'note'},'잠금을 해제해도 다른 잠금, 요일 휴무, 예약 한도는 그대로 적용돼요.'));
+  const blockList=el('div',{class:'stack closure-list'});
+  if(!blocks.items.length)blockList.append(empty('등록된 시간 잠금이 없어요.'));
+  for(const group of groupClosureBlocks(blocks.items)){
+    const first=group.items[0],last=group.items.at(-1);
+    const row=block=>el('div',{class:'closure-block-row'},el('div',{},el('strong',{},`${dateLabel(block.date)} · ${block.start_time}–${block.end_time}`),block.note?el('p',{class:'muted closure-note'},block.note):null),button('이 날짜 해제',()=>releaseBlock(block),'outline small',{'aria-label':`${dateLabel(block.date)} ${block.start_time}부터 ${block.end_time}까지 잠금 해제`}));
+    if(!group.batch_id){blockList.append(el('div',{class:'inline-info'},row(first)));continue;}
+    const period=first.date===last.date?dateLabel(first.date):`${dateLabel(first.date)} – ${dateLabel(last.date)}`;
+    const details=el('details',{class:'closure-group-details'},el('summary',{},`날짜별 잠금 ${group.items.length}개 보기 · 개별 해제`),el('div',{class:'stack'},group.items.map(row)));
+    blockList.append(el('section',{class:'closure-group'},el('div',{class:'card-head'},el('div',{},el('span',{class:'closure-group-label'},`등록 묶음 · 표시된 잠금 ${group.items.length}개`),el('h3',{},period)),button('묶음 해제',()=>releaseBlockGroup(group),'outline small')),el('p',{class:'muted'},`매일 ${first.start_time}–${first.end_time}`),first.note?el('p',{class:'closure-note'},first.note):null,details));
   }
   blockCard.append(blockList);content.replaceChildren(settingsForm,blockCard);
 }
 function addBlock(){
-  openDialog('휴무 · 시간 차단',form([field('날짜','date','date',state.date,{required:true,min:seoulToday(),max:addDays(seoulToday(),365)}),el('div',{class:'field-row'},field('시작 시간','start_time','time','12:00',{required:true,step:1800}),field('종료 시간','end_time','time','13:00',{required:true,step:1800})),field('차단 메모','note','textarea','',{maxlength:500,placeholder:'예: 점심시간, 개인 일정'}),el('p',{class:'note'},'오늘부터 365일 후까지 차단을 등록할 수 있어요. 하루 전체를 쉬려면 해당 날짜의 영업 시작부터 종료까지 차단해 주세요.')],'시간 차단 저장',async values=>{await api('/admin/blocks',{method:'POST',body:values});dialog.close();render();notify('시간 차단을 등록했어요.');}));
+  const version=renderVersion,access=sessionAccessKey(state.session);
+  showClosureDialog({api,el,field,button,dialog,openDialog,defaultDate:state.date,isContextCurrent:()=>version===renderVersion&&access===sessionAccessKey(state.session),onSaved:result=>{dialog.close();render();notify(`총 ${result.items.length}일의 시간 잠금을 등록했어요.`);}});
+}
+function confirmBlockRelease(title,message,path,success){
+  const version=renderVersion,access=sessionAccessKey(state.session);
+  let panel;
+  const current=()=>dialog.open&&panel&&dialog.contains(panel)&&version===renderVersion&&access===sessionAccessKey(state.session);
+  confirmation(title,message,'잠금 해제하기',async()=>{
+    if(!current())return;
+    await api(path,{method:'DELETE'});
+    if(!current())return;
+    render();notify(success);
+  });
+  panel=dialog.lastElementChild;
+}
+function releaseBlock(block){
+  confirmBlockRelease('이 날짜의 잠금 해제',`${dateLabel(block.date)} ${block.start_time}–${block.end_time} 잠금만 해제할까요? 같은 시간에 등록된 다른 잠금과 요일 휴무는 유지돼요.`,`/admin/blocks/${encodeURIComponent(block.id)}`,'선택한 날짜의 잠금을 해제했어요.');
+}
+function releaseBlockGroup(group){
+  confirmBlockRelease('잠금 묶음 해제',`표시된 잠금 ${group.items.length}개를 포함해 이 등록 묶음 전체를 해제할까요? 따로 등록한 다른 묶음과 개별 잠금, 요일 휴무는 유지돼요. 해제 후 예약하기 화면에서 가능 시간을 확인해 주세요.`,`/admin/block-batches/${encodeURIComponent(group.batch_id)}`,'선택한 잠금 묶음을 해제했어요.');
 }
 
 async function renderUsers(container,version){

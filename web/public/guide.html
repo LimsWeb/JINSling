@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#174d46">
+  <meta name="color-scheme" content="light">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="jinSling 회원과 사장님을 위한 가입, 예약, 휴무 잠금, QR 안내 및 자료 내보내기 이용 가이드.">
+  <title>이용 가이드 · jinSling</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/guide.css">
+  <script type="module" src="/guide.mjs"></script>
+</head>
+<body class="guide-body">
+  <a class="guide-skip" href="#guide-content">안내 내용으로 바로 가기</a>
+  <div class="guide-shell">
+    <header class="guide-header">
+      <a class="brand" href="/" aria-label="jinSling 예약으로 돌아가기"><span class="brand-mark" aria-hidden="true">j.</span><span><strong>jinSling</strong><small>YOUR TIME, WELL SPENT</small></span></a>
+      <a class="btn outline small" href="/">예약 화면으로</a>
+    </header>
+    <main id="guide-content">
+      <section class="guide-hero" aria-labelledby="guide-title">
+        <p class="eyebrow">A LITTLE HELP FOR YOUR TIME</p>
+        <h1 id="guide-title">처음부터, 차근차근.</h1>
+        <p class="guide-lead">회원의 첫 예약부터 사장님의 하루 운영까지.<br>필요한 안내를 골라 확인해 주세요.</p>
+        <div class="guide-facts"><span>가입 승인은 처음 한 번</span><span>예약은 한 번에 30분</span><span>모든 시간은 서울 기준</span></div>
+      </section>
+      <section class="guide-tools" aria-label="안내 선택과 검색">
+        <nav class="guide-tabs" aria-label="이용자별 안내">
+          <a id="guide-tab-member" class="active" href="#member" data-guide-view="member" aria-current="page">회원 안내</a>
+          <a id="guide-tab-owner" href="#owner" data-guide-view="owner">사장님 안내</a>
+        </nav>
+        <div class="guide-search-row">
+          <label for="guide-search"><span>안내에서 찾기</span><input id="guide-search" type="search" placeholder="예: 승인, 취소, 휴무, QR" autocomplete="off" aria-describedby="guide-results" disabled></label>
+          <button type="button" class="btn outline" id="guide-print" hidden>이 안내 인쇄</button>
+        </div>
+        <p id="guide-results" class="note" role="status">회원 안내와 사장님 안내를 모두 읽을 수 있어요.</p>
+      </section>
+      <noscript><p class="inline-info">아래에서 모든 안내를 읽을 수 있어요. 브라우저의 찾기와 인쇄 기능도 사용할 수 있어요.</p></noscript>
+      <div class="guide-layout">
+        <aside class="guide-contents" aria-label="빠른 목차"><p>바로 찾아보기</p><nav id="guide-toc" aria-label="안내 목차"><a href="#member-start">가입과 승인</a><a href="#member-book">예약하기</a><a href="#member-change">변경과 취소</a><a href="#owner-closures">휴무 잠금과 해제</a><a href="#owner-share">링크와 QR</a></nav></aside>
+        <div class="guide-reading">
+          <p id="guide-empty" class="empty" hidden>찾는 안내가 없어요. 검색어를 줄이거나 다른 이용자 안내를 선택해 주세요.</p>
+          <section class="guide-panel" id="member" aria-labelledby="member-title">
+            <div class="guide-section-head"><span class="guide-section-label">FOR MEMBERS</span><h2 id="member-title">회원 안내</h2><p>가입 → 승인 → 날짜와 시간 선택 → 예약 확정</p></div>
+            <article class="guide-topic" id="member-start" data-keywords="가입 회원가입 로그인 아이디 비밀번호 승인 대기 초대">
+              <span class="guide-step">01 · 시작하기</span><h3>가입하고 승인을 기다려요</h3>
+              <ol><li>매장에서 받은 예약 주소나 QR을 열고 <strong>회원 가입</strong>을 눌러요.</li><li>이름, 연락처, 아이디와 비밀번호를 입력하고 <strong>가입 신청</strong>을 눌러요.</li><li>첫 가입은 <strong>승인 대기</strong> 상태예요. 사장님이 승인한 후 예약할 수 있어요. <strong>승인 상태 확인</strong>으로 다시 확인해 주세요.</li><li>다음 방문부터는 같은 아이디와 비밀번호로 로그인해요. 매번 가입하거나 승인을 다시 받을 필요는 없어요.</li></ol>
+              <p class="guide-tip">아이디는 영문·숫자·밑줄(_) 4–32자, 비밀번호는 12–128자예요. 1회용 초대로 가입해도 첫 승인은 필요해요. 신규 가입을 쉬는 동안에도 기존 회원은 로그인할 수 있어요.</p>
+            </article>
+            <article class="guide-topic" id="member-book" data-keywords="날짜 시간 예약 확정 달력 30분 가능 마감 휴무 차단">
+              <span class="guide-step">02 · 시간 고르기</span><h3>원하는 시간으로 예약해요</h3>
+              <ol><li><strong>예약하기</strong>에서 날짜를 골라요. 매장에서 정한 예약 공개 기간 안의 날짜를 선택할 수 있어요.</li><li><strong>예약 가능</strong>으로 표시된 시간 중 하나를 선택해요. 한 예약은 <strong>30분</strong>이에요.</li><li>필요하면 전달할 메모를 적고 <strong>예약 내용 확인</strong>을 눌러요.</li><li>날짜와 시간을 확인한 후 <strong>예약 확정하기</strong>를 눌러요. <strong>내 예약</strong>에 확정 내역이 나타나는지 확인해 주세요.</li></ol>
+              <p>예약 확정 내역은 <strong>내 예약</strong>에서 확인해요. 문자·카카오 알림은 자동으로 보내지 않아요. 같은 시간은 한 분만 예약할 수 있어요. 화면에서 골랐더라도 확정하기 전에 다른 분이 예약하면 저장되지 않아요. 안내를 확인하고 다른 시간을 선택해 주세요.</p>
+              <p class="guide-tip">휴무, 운영자 차단, 이미 예약된 시간, 지난 시간, 하루 예약 한도에 도달한 시간은 선택할 수 없어요. 시간표는 서울 시간 기준이에요.</p>
+            </article>
+            <article class="guide-topic" id="member-change" data-keywords="내 예약 조회 취소 변경 메모 마감 분 수정 일정">
+              <span class="guide-step">03 · 예약 관리</span><h3>내 예약을 확인하고 변경해요</h3>
+              <p><strong>내 예약</strong>에서 조회 시작일과 종료일을 정하고 <strong>기간 조회</strong>를 눌러요. 본인 계정에 연결된 예약만 표시돼요.</p>
+              <ul><li><strong>메모 수정</strong>: 전달할 내용을 바꾸고 <strong>변경 내용 저장</strong>을 눌러요.</li><li><strong>예약 취소</strong>: 취소 내용을 확인하고 필요하면 사유를 적은 뒤 <strong>예약 취소하기</strong>를 눌러요.</li><li><strong>날짜·시간 변경</strong>: 기존 예약을 취소하고 다시 예약하거나 매장에 문의해 주세요. 새 시간을 확보하기 전에는 취소 후 원하는 시간의 예약을 보장할 수 없어요.</li></ul>
+              <p class="guide-tip">취소와 메모 수정은 매장에서 정한 취소 마감 전까지만 가능해요. 정확한 마감은 <strong>예약하기 → 나의 예약</strong> 아래 안내에서 확인해요. 마감 시각에 도달했거나 버튼이 없다면 매장에 문의해 주세요.</p>
+            </article>
+            <article class="guide-topic" id="member-status" data-keywords="갱신 새로고침 예약 안보임 전화 수기 현장 오류 연결 승인 중지">
+              <span class="guide-step">04 · 화면 확인</span><h3>예약이 보이지 않거나 화면이 달라졌나요?</h3>
+              <ul><li>예약 목록의 <strong>새로고침</strong>을 누르고 조회 기간이 맞는지 확인해요. 화면을 보고 있을 때는 30초마다 갱신해요.</li><li>연결 오류 안내가 나오면 최신 상태가 아닐 수 있어요. 연결을 확인하고 다시 불러와요.</li><li>전화·현장 예약은 사장님이 회원 계정에 연결한 경우에만 <strong>내 예약</strong>에 보여요. 연락처가 같다는 이유만으로 자동 연결되지는 않아요.</li><li><strong>승인 대기</strong>라면 승인 상태를 확인해요. <strong>이용 중지</strong> 또는 <strong>가입 거절</strong> 안내가 나오면 사장님에게 문의해요.</li></ul>
+            </article>
+            <article class="guide-topic" id="member-password" data-keywords="비밀번호 잊음 분실 재설정 로그인 접속키 변경 24시간">
+              <span class="guide-step">05 · 계정 도움</span><h3>비밀번호를 잊었거나 바꾸고 싶어요</h3>
+              <p><strong>잊었다면 사장님에게 문의</strong>해 주세요. 사장님이 본인 확인 후 발급한 재설정 링크를 열어 새 비밀번호를 직접 정해요. 링크는 24시간 동안 한 번 사용할 수 있어요. 만료되면 새 링크를 요청해 주세요.</p>
+              <p>현재 비밀번호를 알고 있다면 메뉴의 <strong>비밀번호 변경</strong>을 이용해요. 변경하면 다른 기기의 로그인은 종료돼요. 예전 접속키를 사용하던 회원은 <strong>예전 접속키로 시작</strong>에서 아이디와 비밀번호로 전환할 수 있어요.</p>
+              <p class="guide-tip">비밀번호나 재설정 링크를 다른 사람에게 전달하지 마세요. 매장 관리자는 앱에서 회원 비밀번호를 조회할 수 없어요.</p>
+            </article>
+            <article class="guide-topic" id="member-privacy" data-keywords="개인정보 이름 연락처 전화번호 공개 다른회원 보호 QR 안내카드 PNG">
+              <span class="guide-step">06 · 안심하고 이용하기</span><h3>다른 회원에게 무엇이 보이나요?</h3>
+              <p>회원들은 같은 예약 가능 현황을 보지만, 다른 회원의 <strong>이름·연락처·예약 메모는 보지 못해요.</strong> 내 예약에서는 본인의 예약을 확인하고, 사장님은 회원 확인과 일정 관리를 위해 필요한 정보를 확인해요.</p>
+              <p>웹 안내 카드에서는 주소를 눌러 열거나 복사하고, QR을 스캔할 수 있어요. 저장한 <strong>PNG는 이미지</strong>라 주소 클릭·복사 기능이 없어요. 같은 휴대폰에서 이용할 때는 함께 받은 예약 링크를 눌러 주세요.</p>
+              <p class="guide-tip">예약이나 계정 문제가 해결되지 않으면 화면에 표시된 매장 문의 연락처로 연락해 주세요. 비밀번호를 보내는 대신 오류 문구와 발생 시각을 알려 주세요.</p>
+            </article>
+          </section>
+          <section class="guide-panel" id="owner" aria-labelledby="owner-title">
+            <div class="guide-section-head"><span class="guide-section-label">FOR THE OWNER</span><h2 id="owner-title">사장님 안내</h2><p>회원 승인 · 예약 일정 · 휴무 관리 · 안내와 기록</p></div>
+            <article class="guide-topic" id="owner-start" data-keywords="관리자 로그인 회원 승인 거절 중지 회원관리 계정 한도 신규가입">
+              <span class="guide-step">01 · 회원 맞이하기</span><h3>가입 신청을 승인해요</h3>
+              <ol><li>관리자 계정으로 로그인하고 <strong>회원 관리</strong>를 열어요.</li><li><strong>승인 대기</strong> 회원의 이름과 연락처를 확인하고 <strong>승인</strong>을 눌러요.</li><li>승인된 회원은 본인 계정으로 예약할 수 있어요. 필요할 때 <strong>이용 중지</strong> 또는 <strong>이용 재개</strong>를 사용해요.</li></ol>
+              <p><strong>운영 설정 → 새 회원 가입 받기</strong>를 끄면 신규 가입을 잠시 중단해요. 기존 회원의 로그인과 예약은 계속 가능해요. 등록 계정 한도에는 관리자와 승인 대기·이용 중지·가입 거절 계정도 포함돼요.</p>
+              <p class="guide-tip">입력한 연락처 자체가 본인 인증을 뜻하지는 않으므로 가입 정보를 확인해 주세요. 회원 상태 변경과 예약 취소는 별도 작업이에요. 기존 예약도 정리해야 한다면 예약 일정에서 확인하고 개별적으로 처리해 주세요.</p>
+            </article>
+            <article class="guide-topic" id="owner-schedule" data-keywords="예약 일정 다가오는 하루 7일 전체 내계정 조회 수정 취소 메모">
+              <span class="guide-step">02 · 방문 준비</span><h3>전체 일정에서 예약을 관리해요</h3>
+              <p><strong>예약 일정</strong>에서 <strong>다가오는 예약</strong>, <strong>하루 보기</strong>, <strong>7일 보기</strong>로 손님 예약을 확인해요. 날짜를 이동하거나 새로고침해 최신 상태를 확인할 수 있어요.</p>
+              <ul><li><strong>일정 · 메모 변경</strong>: 날짜, 시작 시간, 고객 이름, 연락처와 메모를 수정해요. 예약 겹침과 운영 규칙을 저장할 때 다시 확인해요.</li><li><strong>예약 취소</strong>: 예약과 사유를 확인하고 취소해요. 손님과 일정 변경을 먼저 조율해 주세요.</li><li><strong>내 계정 예약</strong>: 관리자 본인 계정으로 잡은 예약만 보여요. 전체 손님 예약은 <strong>예약 일정</strong>에서 확인해요.</li></ul>
+              <p class="guide-tip">문자·카카오 알림은 자동으로 보내지 않아요. 사장님의 관리 기능은 회원의 취소 마감 후에도 사용할 수 있어요. 목록을 읽는 동안 다른 사람이 수정했다면 새로고침 후 최신 내역을 확인해 주세요.</p>
+            </article>
+            <article class="guide-topic" id="owner-manual" data-keywords="수기 전화 현장 고객 회원연결 계정 예약 등록">
+              <span class="guide-step">03 · 전화·현장 예약</span><h3>수기 예약을 함께 등록해요</h3>
+              <ol><li><strong>예약 일정 → ＋ 수기 예약</strong>을 눌러요.</li><li>기존 회원이면 <strong>회원 연결</strong>에서 해당 계정을 선택해요. 연결하면 손님의 <strong>내 예약</strong>에도 표시돼요.</li><li>회원이 아니면 <strong>전화 · 현장 고객 (계정 연결 없음)</strong>으로 두고 이름·연락처를 입력해요.</li><li>날짜, 시작 시간, 메모를 확인하고 <strong>예약 등록하기</strong>를 눌러요.</li></ol>
+              <p class="guide-tip">연락처만으로 자동 연결하지 않아요. 회원을 정확히 선택해 주세요. 수기 예약도 30분 단위이며 예약 겹침, 영업시간, 하루 예약 한도를 따라요.</p>
+            </article>
+            <article class="guide-topic" id="owner-closures" data-keywords="휴무 잠금 차단 하루 오전 오후 반나절 일괄 날짜범위 31 365 겹침 충돌 미리보기">
+              <span class="guide-step">04 · 쉬는 시간 정하기</span><h3>하루·반나절을 한 번에 잠가요</h3>
+              <ol><li><strong>운영 설정 → 휴무 · 시간 잠금 → ＋ 휴무 잠금</strong>을 눌러요.</li><li>시작일과 종료일을 고르고 시간대를 선택해요. 날짜는 양 끝을 포함해 <strong>최대 31일</strong>, 오늘부터 365일 후까지예요.</li><li>필요하면 잠금 메모를 적고 <strong>잠금 내용 미리보기</strong>를 눌러요.</li><li>기간, 매일 잠글 시간, 대상 날짜를 확인하고 <strong>확인한 내용으로 잠금 저장</strong>을 눌러요.</li></ol>
+              <div class="guide-table-wrap"><table><caption>잠금 시간대</caption><thead><tr><th scope="col">선택</th><th scope="col">매일 적용되는 시간</th></tr></thead><tbody><tr><th scope="row">하루</th><td>00:00–24:00</td></tr><tr><th scope="row">오전</th><td>00:00–12:00</td></tr><tr><th scope="row">오후</th><td>12:00–24:00</td></tr><tr><th scope="row">직접 지정</th><td>30분 단위 선택 · 종료는 24:00까지</td></tr></tbody></table></div>
+              <p class="guide-tip">예약과 겹치면 날짜·시간을 보여주고 <strong>전체 잠금을 저장하지 않아요.</strong> 예약은 자동 취소되지 않아요. 날짜·시간을 바꾸거나 손님과 조율한 후 예약을 별도로 정리해 주세요. 미리보기 후 예약이 생겨도 저장 시 다시 검사해요.</p>
+              <p>미리보기 후 내용을 수정하면 다시 미리보기를 해야 해요. 통신 오류로 저장 결과를 확인하지 못했다면 같은 창에서 같은 내용으로 다시 저장해요. 같은 요청 번호를 사용해 중복 등록을 막아요.</p>
+            </article>
+            <article class="guide-topic" id="owner-release" data-keywords="해제 풀기 묶음 날짜별 잠금 부분 독립 중복 겹침 예약가능">
+              <span class="guide-step">05 · 잠금 해제</span><h3>묶음 전체 또는 날짜 하나만 풀어요</h3>
+              <p><strong>운영 설정 → 휴무 · 시간 잠금</strong>에서 등록한 묶음을 확인해요.</p>
+              <ul><li><strong>묶음 해제</strong>는 그 묶음에 남아 있는 잠금을 모두 해제해요.</li><li><strong>날짜별 잠금 보기 · 개별 해제 → 이 날짜 해제</strong>는 해당 날짜의 잠금 하나만 해제해요.</li><li>기존에 따로 등록한 단일 잠금도 <strong>이 날짜 해제</strong>로 풀 수 있어요.</li></ul>
+              <p class="guide-tip">같은 날짜·시간에 두 묶음이 겹쳐 있다면 하나를 풀어도 다른 묶음은 남아요. 요일 휴무, 영업시간, 하루 한도, 기존 예약도 계속 적용되므로 <strong>잠금 해제가 예약 가능을 보장하지는 않아요.</strong> 해제 후 예약하기 화면에서 확인해 주세요.</p>
+            </article>
+            <article class="guide-topic" id="owner-settings" data-keywords="운영 설정 영업시간 요일 하루 한도 취소 마감 공개기간 연락처 30분">
+              <span class="guide-step">06 · 운영 기준</span><h3>영업시간과 예약 한도를 정해요</h3>
+              <p><strong>운영 설정</strong>에서 매장 이름, 공개 문의 연락처, 예약 공개 기간, 고객 취소 마감, 등록 계정 한도와 신규 가입 여부를 설정해요. 아래에서 요일별 휴무, 시작·종료 시간, 하루 예약 한도를 정하고 <strong>운영 설정 저장</strong>을 눌러요.</p>
+              <p>한 예약은 30분이에요. 빈 시간이 있어도 하루 한도에 도달하면 더 받지 않아요. 이미 확정된 예약과 충돌하는 영업시간·휴무·한도 변경은 저장할 수 없어요.</p>
+              <p class="guide-tip">공개 문의 연락처는 회원 화면에 표시돼요. 관리자 개인 연락처와 별개이므로 손님에게 안내할 번호만 입력해 주세요. 비워 둘 수도 있어요.</p>
+            </article>
+            <article class="guide-topic" id="owner-share" data-keywords="QR 큐알 공유 링크 웹 안내카드 PNG 이미지 인쇄 스캔 초대 7일">
+              <span class="guide-step">07 · 예약 안내 보내기</span><h3>웹 안내 카드와 QR을 나눠 써요</h3>
+              <p><strong>회원 관리 → 예약 안내 · QR</strong>을 열어요. 여러 손님에게 계속 안내할 때는 이 공용 예약 주소를 사용해요.</p>
+              <ul><li><strong>안내 카드 링크 복사</strong>: 주소와 QR을 함께 볼 수 있는 웹 안내 카드를 전달해요. 웹에서는 예약 주소를 열고 복사할 수 있어요.</li><li><strong>이미지 저장 (PNG)</strong>: 안내 카드를 이미지로 저장해 인쇄하거나 보여줘요. PNG 안의 글자는 클릭·복사 버튼이 아니에요. 메시지로 보낼 때는 클릭할 예약 링크도 함께 전달해 주세요.</li><li><strong>＋ 1회용 초대</strong>: 한 사람에게 보낼 초대 링크예요. 7일 동안 한 번만 사용할 수 있고, 사용 전에는 철회할 수 있어요. 여러 사람에게 같은 초대를 돌리지 마세요.</li></ul>
+              <p class="guide-tip">공용 안내와 1회용 초대 모두 가입 후 첫 승인이 필요해요. QR을 인쇄한 뒤 휴대폰으로 실제 주소가 잘 열리는지 확인해 주세요.</p>
+            </article>
+            <article class="guide-topic" id="owner-password" data-keywords="비밀번호 재설정 분실 지원 본인확인 24시간 링크 로그인 관리자">
+              <span class="guide-step">08 · 회원 계정 지원</span><h3>비밀번호 재설정을 도와줘요</h3>
+              <ol><li><strong>회원 관리</strong>에서 요청한 회원의 이름·아이디·연락처를 확인해요.</li><li><strong>비밀번호 재설정</strong>을 누르고 확인해요.</li><li>한 번 표시되는 재설정 링크를 해당 회원 본인에게 안전하게 전달해요. 회원이 링크에서 새 비밀번호를 직접 정해요.</li></ol>
+              <p>재설정 링크는 24시간 동안 한 번 사용할 수 있어요. 비밀번호를 대신 정하거나 기존 비밀번호를 조회하는 기능은 없어요. 사장님 본인 계정의 비밀번호도 메뉴의 <strong>비밀번호 변경</strong>에서 바꿀 수 있어요.</p>
+              <p class="guide-tip">사장님이 로그인할 수 없고 재설정 링크도 없다면 유지보수 담당자에게 계정 복구를 요청해 주세요. 비밀번호·재설정 링크를 공용 채팅이나 안내 가이드에 올리지 마세요.</p>
+            </article>
+            <article class="guide-topic" id="owner-records" data-keywords="CSV 다운로드 내보내기 기록 백업 복구 회원 예약 엑셀 시트 개인정보">
+              <span class="guide-step">09 · 기록 보관</span><h3>CSV로 확인하고 백업은 따로 관리해요</h3>
+              <ul><li><strong>회원 관리 → 회원 CSV 다운로드</strong>: 회원 목록을 받아요.</li><li><strong>기록 · 내보내기 → 예약 CSV 다운로드</strong>: 시작일과 종료일을 정해 해당 기간의 예약 자료를 받아요.</li><li><strong>기록 · 내보내기 → 최근 변경 기록</strong>: 최근 100건을 확인하고 <strong>변경 내용 보기</strong>를 펼쳐요.</li></ul>
+              <p>CSV에는 이름·연락처 등 개인정보가 포함돼요. 업무에 필요한 담당자만 접근할 수 있는 곳에 보관해 주세요. 비밀번호나 재설정 링크는 CSV로 내려받을 수 없어요.</p>
+              <p class="guide-tip">CSV는 내려받은 시점의 자료예요. 시트에서 수정해도 앱에 자동 반영되지 않고, 전체 서비스 복구용 백업을 대신하지 않아요. 운영 데이터 백업과 복구는 유지보수 담당자에게 요청하고, 복구 전에 대상 시점과 범위를 함께 확인해 주세요.</p>
+            </article>
+          </section>
+        </div>
+      </div>
+    </main>
+    <footer class="guide-footer"><p>이 안내는 로그인 없이 읽을 수 있어요. 실제 회원·예약 자료는 포함하지 않아요.</p><p>메뉴가 보이지 않으면 로그인한 계정과 승인 상태를 확인해 주세요. <a href="/">예약 화면으로 돌아가기</a></p></footer>
+  </div>
+</body>
+</html>

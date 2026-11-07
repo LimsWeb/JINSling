@@ -1,8 +1,16 @@
-# Implementation status — 2026-11-02, pilot handoff
+# Implementation status — 2026-11-07, closures, guides and isolated AI lab
 
 ## Authorized outcome
 
 The current operating agreement is that the developer handles deployment and cloud maintenance, while the shop owner is the sole application administrator for member approval and daily scheduling. The developer retains technical cloud/deployment authority; the app does not make production data technically inaccessible to the developer. Transferring the cloud accounts is optional, not a launch prerequisite. Strict zero monetary cost and no always-on local server remain requirements.
+
+## 2026-11-07 update
+
+- Bulk day, morning, afternoon and custom-time closures, spanning up to 31 inclusive dates. Existing bookings reject the complete batch. Atomic DB writes protect against bookings arriving after preview. Idempotent UUIDs and scoped group release preserve unrelated locks and reservations. No operating DB migration.
+- In-app public owner/member guide with search, role links and print support. Separate owner/member PDF manuals are provided as release artifacts.
+- Independent `ai-lab/` project with its own package, build, Worker, schema and deployment settings. Synthetic owner/member accounts, manual tools and chat-generated confirmation proposals cover reservations, locks and membership status. Production builds exclude it.
+- Default simulation explicitly identifies itself. Optional Workers AI binding uses a fixed Gemma model, strict structured responses, server permissions, confirmation expiry, atomic/idempotent mutations and per-day model budgets. Actual live model quality and account-level Free plan must be verified on the separate lab deployment.
+- Current production suite: 96/96 tests, 40 JavaScript syntax checks, 12 Chromium closure/guide scenarios. AI evidence is recorded separately in VERIFICATION.md. Cloudflare deployment was not performed by this session.
 
 ## Implemented
 
@@ -28,7 +36,7 @@ The user has confirmed initial administrator registration and customer signup/ap
 
 ## Verification
 
-Dated evidence is recorded in [VERIFICATION.md](VERIFICATION.md). The root integrator reran the final calendar patch: **83/83 tests passed**, all **31 JavaScript files** passed syntax checks, and `git diff --check` passed. Existing reservation atomicity, optimistic versions, blocks, daily limits and duplicate-request protection remain covered. The compiled Pages worker and 14-file upload ZIP were validated against the source.
+Dated evidence is recorded in [VERIFICATION.md](VERIFICATION.md). The prior calendar patch verification was: **83/83 tests passed**, all **31 JavaScript files** passed syntax checks, and `git diff --check` passed. Existing reservation atomicity, optimistic versions, blocks, daily limits and duplicate-request protection remain covered. The compiled Pages worker and 14-file upload ZIP were validated against the source.
 
 The calendar patch passed nine Chromium scenarios with the real local API/SQLite and fictional accounts, including privacy, occupancy refresh, cancellation, unavailable-network recovery, month/date alignment and mobile sharing. Review found two asynchronous response races; both were fixed and pinned by three focused browser checks (late success, late conflict, and an older availability response arriving after a conflict). No unresolved material review findings remained. The optional scripts are in `web/tests/browser/` and are restricted to local previews.
 

@@ -97,7 +97,7 @@ hr{border:0;border-top:1px solid var(--line);margin:24px 0}
 .hint-card p{font-size:.77rem;color:var(--muted);margin:0;line-height:1.9}
 .accent-tag{display:inline-flex;background:#fae2d0;color:#80543c;border-radius:5px;padding:5px 8px;font-size:.67rem;font-weight:600}
 .stack{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
-.form-stack{display:grid;gap:19px}
+.form-stack{display:grid;grid-template-columns:minmax(0,1fr);gap:19px}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:15px}
 .field-hint{display:block;font-size:.73rem;font-weight:400;line-height:1.65}
 .checkbox-row{display:flex;align-items:flex-start;gap:12px}
@@ -308,3 +308,46 @@ dialog{padding:24px}
 .page-head .refresh-row{display:block;text-align:right}
 .page-head .refresh-row small{display:none}
 }
+
+/* Closures and help follow the booking application's cream and teal palette. */
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.guide-nav-link{text-decoration:none}
+.guide-external{margin-left:auto;font-size:.8rem}
+.auth-guide{margin:23px 0 0;padding-top:18px;border-top:1px solid var(--line);font-size:.8rem;text-align:center}
+.auth-guide a{text-underline-offset:4px}
+.closure-fields{border:0;padding:0;margin:0;display:grid;gap:19px;min-width:0}
+.closure-fields:disabled{opacity:.65}
+.closure-presets{padding:0;border:0;margin:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;min-width:0}
+.closure-presets legend{font-size:.87rem;font-weight:600;margin-bottom:9px}
+.closure-preset{position:relative;display:block;cursor:pointer;min-width:0}
+.closure-preset input{position:absolute;opacity:0;width:1px;height:1px;min-height:0;pointer-events:none}
+.closure-preset>span{display:grid;gap:5px;min-height:72px;align-content:center;text-align:center;border:1px solid #c5d1c7;border-radius:10px;padding:10px 5px;background:var(--paper)}
+.closure-preset strong{font-size:.83rem}
+.closure-preset small{font-size:.67rem;white-space:nowrap}
+.closure-preset input:checked+span{background:var(--teal);color:white;border-color:var(--teal)}
+.closure-preset input:checked+span small{color:#e3eee5}
+.closure-preset input:focus-visible+span{outline:3px solid #dc8d5b;outline-offset:3px}
+.closure-status:empty{display:none}
+.closure-status{margin:0}
+.closure-preview{border:1px solid #bfd1bf;border-radius:12px;padding:19px;background:#f0f5eb}
+.closure-preview.has-conflicts{background:#fff7f2;border-color:#e8c4b6}
+.closure-preview h3{margin-bottom:12px}
+.closure-preview p{font-size:.85rem;margin-bottom:10px}
+.closure-preview p:last-child{margin-bottom:0}
+.closure-preview-range{font-weight:700;overflow-wrap:anywhere}
+.closure-note{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem}
+.closure-conflicts,.closure-dates ul{padding-left:21px;line-height:1.9;font-size:.8rem}
+.closure-dates summary,.closure-group-details summary{cursor:pointer;line-height:1.6;font-size:.8rem;text-decoration:underline;text-underline-offset:3px;padding:7px 0}
+.closure-group{border:1px solid var(--line);border-radius:12px;padding:18px;background:#f5f7f0}
+.closure-group .card-head{margin-bottom:10px;align-items:flex-start}
+.closure-group h3{margin:7px 0 0;font-size:.9rem;line-height:1.6}
+.closure-group>p{margin-bottom:10px}
+.closure-group-label{font-size:.68rem;letter-spacing:.3px;color:var(--muted)}
+.closure-group-details .stack{margin-top:9px}
+.closure-block-row{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:12px 0;border-top:1px solid var(--line)}
+.closure-block-row strong{font-size:.8rem;line-height:1.7}
+.closure-block-row>div{min-width:0}
+.closure-block-row .btn{flex-shrink:0}
+.closure-block-row p{margin:6px 0 0}
+.closure-list>.inline-info>.closure-block-row{padding:0;border:0}
+@media(max-width:620px){.closure-presets{grid-template-columns:repeat(2,minmax(0,1fr))}.closure-date-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}.closure-date-row input{min-width:0;padding:11px 7px;font-size:.82rem}.closure-group{padding:15px}.closure-group .card-head{gap:9px}.closure-group .btn{padding:8px 10px;font-size:.7rem}.closure-block-row{flex-wrap:wrap;gap:8px}.closure-block-row>div{flex:1 1 100%}.closure-preview{padding:16px}.closure-confirmation .btn{white-space:normal;line-height:1.6}.closure-form .dialog-actions{margin-top:0}}

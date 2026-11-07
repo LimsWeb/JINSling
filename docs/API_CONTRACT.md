@@ -34,9 +34,12 @@ Weekly rule: `{weekday,closed,open_time,close_time,daily_limit}`; weekday Sunday
 | DELETE /api/admin/invites/:id | `{}` | `{}` |
 | GET /api/admin/settings | admin | `{settings,weekly_rules:[Rule]}` |
 | PUT /api/admin/settings | `{settings,weekly_rules:[Rule]}` | same result; reject conflicting future confirmed bookings |
-| GET /api/admin/blocks?from=...&to=... | admin | `{items:[{id,date,start_time,end_time,note}]}` |
+| GET /api/admin/blocks?from=...&to=... | admin | `{items:[{id,date,start_time,end_time,note,batch_id?}]}` |
 | POST /api/admin/blocks | `{date,start_time,end_time,note}` | `{block}`; reject confirmed-booking conflicts |
 | DELETE /api/admin/blocks/:id | `{}` | `{}` |
+| POST /api/admin/blocks/preview | `{from,to,period,start_time?,end_time?,note?}` | `{from,to,period,start_time,end_time,dates,count,conflicts:[{date,start_time,end_time}]}`; no writes |
+| POST /api/admin/blocks/bulk | same fields plus required UUID `request_id` | `{batch_id,items:[{id,date,start_time,end_time,note,batch_id}]}`; one atomic batch |
+| DELETE /api/admin/block-batches/:uuid | `{}` | `{batch_id,count}`; soft-delete only this group; repeat returns count 0 |
 | GET /api/admin/audit?limit=... | admin | `{items:[{id,entity_type,entity_id,action,actor_name,created_at,before_data,after_data}]}` |
 | GET /api/admin/export.csv?from=...&to=... | admin | CSV download |
 
@@ -50,6 +53,8 @@ Weekly rule: `{weekday,closed,open_time,close_time,daily_limit}`; weekday Sunday
 - Availability day status is `available|full|closed|unavailable`; slot status is `available|booked|blocked|past|full`. `available_count` is the number of selectable start times, not the remaining daily booking allowance. Occupied slots remain `booked` when the daily cap is reached. Cancelled bookings and deleted blocks reopen their slots, subject to the remaining rules.
 - Calendar availability accepts a real `YYYY-MM` only and returns 28–31 summaries. It reads weekly rules and the month's anonymous booking/block intervals in three bounded queries rather than one query per day. Each response captures Seoul time once. The displayed state is informational; database constraints recheck overlap and capacity atomically at booking creation.
 - Admin block DELETE means soft delete with acting user recorded.
+- Bulk closure dates are inclusive, 1–31 days, between Seoul today and today + 365 days. `period` is `day` (00:00–24:00), `morning` (00:00–12:00), `afternoon` (12:00–24:00), or `custom` (explicit half-hour boundaries). Presets determine their own times. A confirmed reservation conflicting on any selected date rejects the whole batch; neither reservations nor an earlier subset of dates are changed. The database trigger still checks conflicts after the preview.
+- Bulk `request_id` is an actor-and-payload-bound UUID. Identical retries return the surviving original rows. Reuse with another payload returns conflict, including concurrent attempts with disjoint date ranges. Soft-deleted rows retain request identity, so retry cannot resurrect a released group. Unlocking a group leaves independent groups, legacy single blocks and weekly closures intact. No schema migration is needed for bulk closure metadata.
 - Admin settings save includes the complete seven weekly rules and all six settings. Default settings: shop_name jinSling 예약; contact_phone empty; booking_window_days 30; cancel_before_minutes 0; member_limit 100; registration_open true. Member limit accepts 1–1,000, counts all stored accounts, and cannot be lowered below current count.
 - New bookings/corrected slot must be strictly in the future. Customer memo edits/cancellations are allowed only before the start/cancel cutoff. Admin may correct or cancel historical records.
 

@@ -1,0 +1,14 @@
+{
+  "name": "jinsling-ai-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=24"},
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "test": "node --test --test-isolation=none tests/*.test.mjs",
+    "build": "node scripts/build.mjs",
+    "keys": "node scripts/create-access-codes.mjs"
+  },
+  "devDependencies": {"esbuild": "0.28.2"}
+}

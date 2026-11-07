@@ -7,7 +7,7 @@ export const publicTimestamps=row=>Object.fromEntries(Object.entries(row).map(([
 export const publicBooking=b=>publicTimestamps(Object.fromEntries(['id','user_id','customer_name','phone','date','start_time','end_time','memo','status','version','created_at','updated_at'].map(k=>[k,b[k]])));
 export const publicSettings=s=>Object.fromEntries(Object.keys(defaults).map(k=>[k,k==='registration_open'?!!s[k]:s[k]]));
 export const publicRule=r=>({weekday:r.weekday,closed:!!r.closed,open_time:r.open_time,close_time:r.close_time,daily_limit:r.daily_limit});
-export const publicBlock=b=>Object.fromEntries(['id','date','start_time','end_time','note'].map(k=>[k,b[k]]));
+export const publicBlock=b=>{const result=Object.fromEntries(['id','date','start_time','end_time','note'].map(k=>[k,b[k]])),batch=/^bulk_([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})_[0-9a-f]{64}_\d{4}-\d{2}-\d{2}$/.exec(b.id);if(batch)result.batch_id=batch[1];return result;};
 export const token=()=>{const bytes=crypto.getRandomValues(new Uint8Array(32));return btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');};
 export async function hash(value){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),b=>b.toString(16).padStart(2,'0')).join('');}
 export const uuid=()=>crypto.randomUUID();

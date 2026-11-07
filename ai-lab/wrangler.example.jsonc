@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jinsling-ai-lab",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-11-07",
+  "vars": {
+    "LAB_STAGE": "sandbox",
+    "AI_MODE": "simulation",
+    "FREE_PLAN_CONFIRMED": "false"
+  },
+  "d1_databases": [{
+    "binding": "LAB_DB",
+    "database_name": "jinsling-ai-lab-db",
+    "database_id": "REPLACE_WITH_NEW_LAB_DATABASE_ID",
+    "migrations_dir": "./migrations"
+  }]
+  // After verifying Workers Free, add AI binding in this lab project's dashboard.
+  // Keep LAB_OWNER_CODE and LAB_MEMBER_CODE in Secrets, never this file.
+}

@@ -1,6 +1,7 @@
 import {ApiError,fail,defaults,publicUser,publicBooking,publicSettings,publicRule,publicBlock,publicTimestamps,utc,token,hash,uuid,cookie,today,seoulNow,addDays,text,phone,integer,validDate,minute,time,version,only,readJson,securityHeaders,json,errorResponse,sqlError,csvResponse} from './support.mjs';
 import {accountSession,accountRoutes,issuePasswordReset,passwordAuthReady} from './accounts.mjs';
 import {calendarMonthDates,dayAvailability} from './availability.mjs';
+import {previewClosures,createClosures,releaseClosures} from './closures.mjs';
 
 export async function handleApi(request,env,ctx={}) {
  try{return await route(request,env);}catch(error){try{sqlError(error);}catch(mapped){return errorResponse(mapped);}return errorResponse(error);}
@@ -86,6 +87,10 @@ async function route(request,env){
   for(const r of body.weekly_rules){if(!r||typeof r!=='object'||Array.isArray(r))fail(400,'invalid_input','요일을 확인해 주세요.');only(r,['weekday','closed','open_time','close_time','daily_limit']);const weekday=integer(r.weekday,0,6),open=minute(r.open_time),close=minute(r.close_time,{end:true}),cap=integer(r.daily_limit,1,48);if(seen.has(weekday)||typeof r.closed!=='boolean'||open>=close)fail(400,'invalid_input','영업시간을 확인해 주세요.');seen.add(weekday);statements.push(stmt('UPDATE weekly_rules SET closed=?,open_time=?,close_time=?,open_min=?,close_min=?,daily_limit=?,updated_by=? WHERE weekday=?',r.closed?1:0,time(open),time(close),open,close,cap,user.id,weekday));}
   await db.batch(statements);return json({settings:publicSettings(await first('SELECT * FROM settings WHERE id=1')),weekly_rules:(await rules()).map(publicRule)});
  }
+ if(method==='POST'&&path==='/api/admin/blocks/preview')return json(await previewClosures(db,body));
+ if(method==='POST'&&path==='/api/admin/blocks/bulk')return json(await createClosures(db,body,user.id));
+ routeMatch=/^\/api\/admin\/block-batches\/([^/]+)$/.exec(path);
+ if(method==='DELETE'&&routeMatch){only(body,[]);return json(await releaseClosures(db,routeMatch[1],user.id));}
  if(method==='GET'&&path==='/api/admin/blocks'){const [from,to]=range();return json({items:(await all('SELECT * FROM blocks WHERE date BETWEEN ? AND ? AND deleted_at IS NULL ORDER BY date,start_min',from,to)).map(publicBlock)});}
  if(method==='POST'&&path==='/api/admin/blocks'){only(body,['date','start_time','end_time','note']);const date=validDate(body.date),start=minute(body.start_time),end=minute(body.end_time,{end:true}),note=text(body.note??'','메모',500,{empty:true});if(start>=end)fail(400,'invalid_input','차단 시간을 확인해 주세요.');const id=uuid();await run('INSERT INTO blocks(id,date,start_time,end_time,start_min,end_min,note,created_by) VALUES (?,?,?,?,?,?,?,?)',id,date,time(start),time(end),start,end,note,user.id);return json({block:publicBlock(await first('SELECT * FROM blocks WHERE id=?',id))});}
  routeMatch=/^\/api\/admin\/blocks\/([^/]+)$/.exec(path);
